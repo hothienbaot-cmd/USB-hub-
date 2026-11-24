@@ -1,0 +1,1937 @@
+-- USB HUB PRO 1.5 (COMPACT)
+local Plrs, RunSvc, Uis, Wsp, Cg, TS, HS, MS, VU, SndSvc =
+	game:GetService("Players"), game:GetService("RunService"), game:GetService("UserInputService"),
+	game:GetService("Workspace"), game:GetService("CoreGui"), game:GetService("TeleportService"),
+	game:GetService("HttpService"), game:GetService("MarketplaceService"), game:GetService("VirtualUser"),
+	game:GetService("SoundService")
+local LP = Plrs.LocalPlayer
+
+for _, n in ipairs({"USBHubGui","NexusFlyGui","MickeyChatGui","TranslationGui","PlayerInfoGui","CalculatorGui","ShiftLockGui","CrosshairGui","USBHubRadarGui","FloatPadGui","USBAutoAimGui","USBBlockBlastGui"}) do
+	if Cg:FindFirstChild(n) then Cg[n]:Destroy() end
+end
+
+local function new(cls, props, parent)
+	local o = Instance.new(cls)
+	for k, v in pairs(props or {}) do o[k] = v end
+	if parent then o.Parent = parent end
+	return o
+end
+local function rad(o, r) new("UICorner", {CornerRadius = UDim.new(0, r)}, o) return o end
+local function stk(o, c, t, tr) new("UIStroke", {Color = c, Thickness = t or 1, Transparency = tr or 0}, o) end
+local function hrpOf(p) return p and p.Character and p.Character:FindFirstChild("HumanoidRootPart") end
+local function humOf(p) return p and p.Character and p.Character:FindFirstChildOfClass("Humanoid") end
+local function destroyGui(name) if Cg:FindFirstChild(name) then pcall(function() Cg[name]:Destroy() end) end end
+
+local function calcCamDirMove(hum, cam)
+	if not hum or not cam or hum.MoveDirection.Magnitude <= 0.01 then return Vector3.zero end
+	local fL = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+	local rL = Vector3.new(cam.CFrame.RightVector.X, 0, cam.CFrame.RightVector.Z)
+	fL = fL.Magnitude > 0.001 and fL.Unit or Vector3.new(0, 0, -1)
+	rL = rL.Magnitude > 0.001 and rL.Unit or Vector3.new(1, 0, 0)
+	local d = cam.CFrame.LookVector * hum.MoveDirection:Dot(fL) + cam.CFrame.RightVector * hum.MoveDirection:Dot(rL)
+	return d.Magnitude > 1 and d.Unit or d
+end
+
+local SGui = new("ScreenGui", {Name="USBHubGui", ResetOnSpawn=false}, Cg)
+local Logo = rad(new("TextButton", {Size=UDim2.new(0,48,0,48), Position=UDim2.new(0,20,0.3,0), BackgroundColor3=Color3.fromRGB(9,34,24), Text="🪯", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=24, Active=true, Draggable=true}, SGui), 999)
+stk(Logo, Color3.fromRGB(60,235,140), 2)
+
+local MFrame = rad(new("Frame", {Size=UDim2.new(0,440,0,310), Position=UDim2.new(0.5,-220,0.5,-155), BackgroundColor3=Color3.fromRGB(9,34,24), BackgroundTransparency=0.06, BorderSizePixel=0, Active=true, Draggable=true}, SGui), 10)
+stk(MFrame, Color3.fromRGB(60,235,140), 1.8)
+Logo.MouseButton1Click:Connect(function() MFrame.Visible = not MFrame.Visible end)
+
+local Sidebar = rad(new("Frame", {Size=UDim2.new(0,115,1,-10), Position=UDim2.new(0,5,0,5), BackgroundColor3=Color3.fromRGB(6,22,15), BorderSizePixel=0}, MFrame), 8)
+stk(Sidebar, Color3.fromRGB(55,210,125), 1, 0.55)
+
+local CFrameBox = new("Frame", {Size=UDim2.new(1,-130,1,-10), Position=UDim2.new(0,125,0,5), BackgroundTransparency=1}, MFrame)
+local tabs, tabBtns = {}, {}
+local function mkTab(txt, y, h)
+	local idx = #tabs + 1
+	local b = rad(new("TextButton", {Size=UDim2.new(1,-10,0,30), Position=UDim2.new(0,5,0,y), BackgroundColor3=idx==1 and Color3.fromRGB(28,96,66) or Color3.fromRGB(16,54,38), Text=txt, TextColor3=Color3.fromRGB(175,245,205), Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left}, Sidebar), 6)
+	stk(b, Color3.fromRGB(60,235,140), 1, 0.72)
+	local c = new("ScrollingFrame", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, CanvasSize=UDim2.new(0,0,0,h or 500), ScrollBarThickness=3, ScrollBarImageColor3=Color3.fromRGB(60,235,140), Visible=idx==1}, CFrameBox)
+	b.MouseButton1Click:Connect(function()
+		for i, t in ipairs(tabs) do t.Visible = (i==idx); tabBtns[i].BackgroundColor3 = (i==idx) and Color3.fromRGB(28,96,66) or Color3.fromRGB(16,54,38) end
+	end)
+	tabs[idx], tabBtns[idx] = c, b
+	return c
+end
+
+local CPlayer = mkTab("👤 Player", 8, 470)
+local CScript = mkTab("⚡ Script", 42, 730)
+local CSupport = mkTab("📡 Support", 76, 420)
+local CInfo = mkTab("ℹ️ Info", 110, 360)
+local CMiniGame = mkTab("🎮 Mini Game", 144, 420)
+
+local function addLbl(p, txt, y) new("TextLabel", {Size=UDim2.new(1,0,0,18), Position=UDim2.new(0,0,0,y), BackgroundTransparency=1, Text=txt, TextColor3=Color3.fromRGB(195,255,220), Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left}, p) end
+local function addTBox(p, def, y, cb)
+	local tb = rad(new("TextBox", {Size=UDim2.new(1,0,0,26), Position=UDim2.new(0,0,0,y), BackgroundColor3=Color3.fromRGB(12,44,31), Text=def, TextColor3=Color3.fromRGB(235,255,245), Font=Enum.Font.Gotham, TextSize=12, ClearTextOnFocus=false}, p), 6)
+	stk(tb, Color3.fromRGB(55,210,125), 1, 0.65)
+	tb.FocusLost:Connect(function() cb(tb.Text) end)
+end
+local function addTgl(p, txt, y, cb)
+	local st, btn = false
+	btn = rad(new("TextButton", {Size=UDim2.new(1,0,0,28), Position=UDim2.new(0,0,0,y), BackgroundColor3=Color3.fromRGB(16,54,38), Text=txt..": TẮT", TextColor3=Color3.fromRGB(175,245,205), Font=Enum.Font.GothamBold, TextSize=11}, p), 6)
+	stk(btn, Color3.fromRGB(60,235,140), 1, 0.65)
+	btn.MouseButton1Click:Connect(function()
+		st = not st
+		btn.Text = txt..(st and ": BẬT" or ": TẮT")
+		btn.BackgroundColor3 = st and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+		cb(st)
+	end)
+	return btn
+end
+local function mkBtn(p, x, y, w, h, txt, bg, ts, cb)
+	local b = rad(new("TextButton", {Size=UDim2.new(w or 1, x==0 and 0 or -2, 0, h or 28), Position=UDim2.new(x or 0, 0, 0, y), BackgroundColor3=bg or Color3.fromRGB(16,58,42), Text=txt, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=ts or 11}, p), 6)
+	stk(b, Color3.fromRGB(60,235,140), 1, 0.65)
+	if cb then b.MouseButton1Click:Connect(cb) end
+	return b
+end
+
+-- 1. PLAYER
+addLbl(CPlayer, "Speed:", 5); addTBox(CPlayer, "16", 24, function(v) local n, h = tonumber(v), humOf(LP); if n and h then h.WalkSpeed = n end end)
+addLbl(CPlayer, "JumpPower:", 55); addTBox(CPlayer, "50", 74, function(v) local n, h = tonumber(v), humOf(LP); if n and h then h.UseJumpPower = true; h.JumpPower = n end end)
+addLbl(CPlayer, "Gravity:", 105); addTBox(CPlayer, "196.2", 124, function(v) local n = tonumber(v); if n then Wsp.Gravity = n end end)
+addLbl(CPlayer, "Fly Speed:", 155); local pFlySpd = 50
+addTBox(CPlayer, "50", 174, function(v) local n = tonumber(v); if n then pFlySpd = n end end)
+
+local pFlying, pConn = false, nil
+local function clearPFly()
+	local hrp = hrpOf(LP)
+	if hrp then for _, o in ipairs(hrp:GetChildren()) do if o.Name == "PFL_BV" or o.Name == "PFL_BG" then pcall(function() o:Destroy() end) end end end
+end
+addTgl(CPlayer, "Fly", 206, function(st)
+	pFlying = st; if pConn then pConn:Disconnect(); pConn = nil end; clearPFly(); if not st then return end
+	pConn = RunSvc.RenderStepped:Connect(function()
+		local hrp, hum, cam = hrpOf(LP), humOf(LP), Wsp.CurrentCamera
+		if not pFlying or not hrp or not hum or not cam or hum.Health <= 0 then return end
+		local bv = hrp:FindFirstChild("PFL_BV") or new("BodyVelocity", {Name="PFL_BV", MaxForce=Vector3.new(1e8,1e8,1e8)}, hrp)
+		local bg = hrp:FindFirstChild("PFL_BG") or new("BodyGyro", {Name="PFL_BG", MaxTorque=Vector3.new(1e8,1e8,1e8), P=3e4, D=500}, hrp)
+		bg.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+		local vel = calcCamDirMove(hum, cam) * pFlySpd
+		bv.Velocity, hrp.AssemblyLinearVelocity = vel, vel
+	end)
+end)
+
+mkBtn(CPlayer, 0, 240, 1, 28, "Reset Player", Color3.fromRGB(120,28,28), 11, function() local h = humOf(LP); if h then h.Health = 0 end end)
+
+local noclipOn = false
+addTgl(CPlayer, "Noclip (Xuyên tường)", 274, function(st)
+	noclipOn = st; if _G.NoclipConn then _G.NoclipConn:Disconnect() end
+	if st then _G.NoclipConn = RunSvc.Stepped:Connect(function()
+		if noclipOn and LP.Character then for _, p in ipairs(LP.Character:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide = false end end end
+	end) end
+end)
+
+addTgl(CPlayer, "Infinite Jump", 308, function(st)
+	if _G.InfConn then _G.InfConn:Disconnect() end
+	if st then _G.InfConn = Uis.JumpRequest:Connect(function() local h = humOf(LP); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end end) end
+end)
+
+local SHIFT_OFFSET = Vector3.new(1.75, 0, 0)
+local shiftGui, shiftLockBtn, shiftDelta, shiftStroke, shiftIcon = nil
+local shiftActive, shiftConn, shiftCharConn = false, nil, nil
+local function setShiftAutoRotate(lockRot) local h = humOf(LP); if h then h.AutoRotate = not lockRot end end
+local function refreshShiftVisual()
+	if not shiftStroke then return end
+	shiftStroke.Color = shiftActive and Color3.fromRGB(60,235,140) or Color3.fromRGB(160,235,195)
+	shiftLockBtn.BackgroundColor3 = shiftActive and Color3.fromRGB(28,96,66) or Color3.fromRGB(9,34,24)
+	shiftLockBtn.BackgroundTransparency = shiftActive and 0.1 or 0.2
+	shiftIcon.Text = shiftActive and "🔒" or "🔓"
+	shiftDelta.Visible = shiftActive
+end
+local function stopShiftLockMode()
+	shiftActive = false; refreshShiftVisual(); setShiftAutoRotate(false)
+	if shiftConn then shiftConn:Disconnect(); shiftConn = nil end
+end
+local function startShiftLockMode()
+	if shiftConn then shiftConn:Disconnect() end
+	shiftActive = true; refreshShiftVisual()
+	shiftConn = RunSvc.RenderStepped:Connect(function()
+		local hum, hrp, cam = humOf(LP), hrpOf(LP), Wsp.CurrentCamera
+		if not shiftActive or not hum or not hrp or not cam or hum.Health <= 0 then return end
+		hum.AutoRotate = false; cam.CFrame = cam.CFrame * CFrame.new(SHIFT_OFFSET)
+		local flat = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+		if flat.Magnitude > 0.001 then hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flat.Unit) end
+	end)
+end
+local function destroyShiftLockGui()
+	stopShiftLockMode()
+	if shiftCharConn then shiftCharConn:Disconnect(); shiftCharConn = nil end
+	if shiftGui then pcall(function() shiftGui:Destroy() end); shiftGui = nil end
+	destroyGui("ShiftLockGui"); shiftLockBtn, shiftDelta, shiftStroke, shiftIcon = nil
+end
+local function createShiftLockGui()
+	destroyShiftLockGui()
+	shiftGui = new("ScreenGui", {Name="ShiftLockGui", ResetOnSpawn=false, IgnoreGuiInset=true, DisplayOrder=999999, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	shiftLockBtn = rad(new("ImageButton", {Size=UDim2.new(0,46,0,46), Position=UDim2.new(1,-122,1,-135), BackgroundColor3=Color3.fromRGB(9,34,24), BackgroundTransparency=0.2, Active=true, Draggable=true}, shiftGui), 999)
+	shiftStroke = new("UIStroke", {Color=Color3.fromRGB(160,235,195), Thickness=2}, shiftLockBtn)
+	shiftIcon = new("TextLabel", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="🔓", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=18}, shiftLockBtn)
+	shiftDelta = new("TextLabel", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,22,0,22), Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=1, Text="∆", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=15, ZIndex=5, Visible=false}, shiftGui)
+	stk(shiftDelta, Color3.fromRGB(0,0,0), 1, 0.2)
+	shiftLockBtn.MouseButton1Click:Connect(function() if shiftActive then stopShiftLockMode() else startShiftLockMode() end end)
+	shiftCharConn = LP.CharacterAdded:Connect(function() task.wait(0.15); if shiftActive then startShiftLockMode() else setShiftAutoRotate(false) end end)
+end
+addTgl(CPlayer, "Shift Lock", 342, function(st) if st then createShiftLockGui() else destroyShiftLockGui() end end)
+
+local floatGui, floatBv, floatConn, floatCharConn = nil, nil, nil, nil
+local floatActive, floatVert = false, 0
+local function destroyFloatPad()
+	floatActive, floatVert = false, 0
+	if floatConn then floatConn:Disconnect(); floatConn = nil end
+	if floatCharConn then floatCharConn:Disconnect(); floatCharConn = nil end
+	if floatBv then pcall(function() floatBv:Destroy() end); floatBv = nil end
+	local hrp = hrpOf(LP); if hrp then for _, o in ipairs(hrp:GetChildren()) do if o.Name == "USBFloatBV" then pcall(function() o:Destroy() end) end end end
+	if floatGui then pcall(function() floatGui:Destroy() end); floatGui = nil end
+	destroyGui("FloatPadGui")
+end
+local function createFloatPad()
+	destroyFloatPad(); floatActive = true
+	floatGui = new("ScreenGui", {Name="FloatPadGui", ResetOnSpawn=false, IgnoreGuiInset=true, DisplayOrder=999995, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local box = rad(new("Frame", {Size=UDim2.new(0,116,0,50), Position=UDim2.new(0.16,0,0.68,0), BackgroundColor3=Color3.fromRGB(9,34,24), BackgroundTransparency=0.1, BorderSizePixel=0, Active=true, Draggable=true}, floatGui), 10)
+	stk(box, Color3.fromRGB(60,235,140), 1.6)
+	local function mkDirBtn(txt, x, dir)
+		local b = rad(new("TextButton", {Size=UDim2.new(0,50,0,36), Position=UDim2.new(0,x,0,7), BackgroundColor3=Color3.fromRGB(16,58,42), Text=txt, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=12}, box), 6)
+		stk(b, Color3.fromRGB(60,235,140), 1, 0.55)
+		b.MouseButton1Down:Connect(function() if floatActive then floatVert = dir; b.BackgroundColor3 = Color3.fromRGB(36,145,88) end end)
+		local function rel() if floatVert == dir then floatVert = 0 end; b.BackgroundColor3 = Color3.fromRGB(16,58,42) end
+		b.MouseButton1Up:Connect(rel); b.MouseLeave:Connect(rel)
+	end
+	mkDirBtn("up", 6, 1); mkDirBtn("down", 60, -1)
+	floatConn = RunSvc.RenderStepped:Connect(function()
+		local hrp, hum = hrpOf(LP), humOf(LP)
+		if not floatActive or not hrp or not hum or hum.Health <= 0 then return end
+		if not floatBv or floatBv.Parent ~= hrp then
+			if floatBv then pcall(function() floatBv:Destroy() end) end
+			floatBv = new("BodyVelocity", {Name="USBFloatBV", MaxForce=Vector3.new(0,9e9,0), Velocity=Vector3.zero}, hrp)
+		end
+		local vy = floatVert * 28; floatBv.Velocity = Vector3.new(0, vy, 0)
+		if floatVert ~= 0 then hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, vy, hrp.AssemblyLinearVelocity.Z) end
+	end)
+	floatCharConn = LP.CharacterAdded:Connect(function(nc)
+		if floatActive and nc:WaitForChild("HumanoidRootPart", 10) then task.wait(0.1); floatBv = new("BodyVelocity", {Name="USBFloatBV", MaxForce=Vector3.new(0,9e9,0), Velocity=Vector3.zero}, nc.HumanoidRootPart) end
+	end)
+end
+addTgl(CPlayer, "Float (Lơ lửng)", 376, function(st) if st then createFloatPad() else destroyFloatPad() end end)
+
+-- 2. SCRIPT
+local nexusTglBtn, nexusGuiInstance, nexusCharConn, nexusBv, nexusBg = nil
+local nexusFlyEnabled, nexusSpeed, nexusVertHold, nexusMoveConn = false, 1, 0, nil
+local function cleanNexusForces()
+	if nexusBv then pcall(function() nexusBv:Destroy() end); nexusBv = nil end
+	if nexusBg then pcall(function() nexusBg:Destroy() end); nexusBg = nil end
+	local hrp, hum = hrpOf(LP), humOf(LP)
+	if hrp then for _, o in ipairs(hrp:GetChildren()) do if o.Name == "NexusBV" or o.Name == "NexusBG" then pcall(function() o:Destroy() end) end end end
+	if hum then pcall(function() hum.PlatformStand = false end) end
+end
+local function ensureNexusForces()
+	local char, hrp, hum = LP.Character, hrpOf(LP), humOf(LP)
+	if not hrp or not hum or hum.Health <= 0 then return nil end
+	if not nexusBv or nexusBv.Parent ~= hrp then
+		if nexusBv then pcall(function() nexusBv:Destroy() end) end
+		nexusBv = new("BodyVelocity", {Name="NexusBV", MaxForce=Vector3.new(1e8,1e8,1e8), Velocity=Vector3.zero}, hrp)
+	end
+	if not nexusBg or nexusBg.Parent ~= hrp then
+		if nexusBg then pcall(function() nexusBg:Destroy() end) end
+		nexusBg = new("BodyGyro", {Name="NexusBG", MaxTorque=Vector3.new(1e8,1e8,1e8), P=3e4, D=500, CFrame=hrp.CFrame}, hrp)
+	end
+	return char, hrp, hum
+end
+local function stopNexusLoop()
+	nexusFlyEnabled, nexusVertHold = false, 0
+	if nexusMoveConn then nexusMoveConn:Disconnect(); nexusMoveConn = nil end
+	cleanNexusForces()
+end
+local function startNexusLoop()
+	if nexusMoveConn then nexusMoveConn:Disconnect() end
+	nexusMoveConn = RunSvc.RenderStepped:Connect(function()
+		if not nexusFlyEnabled then return end
+		local char, hrp, hum = ensureNexusForces(); local cam = Wsp.CurrentCamera
+		if not char or not hrp or not hum or not cam then return end
+		nexusBg.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + cam.CFrame.LookVector)
+		local vel = calcCamDirMove(hum, cam) * (math.clamp(nexusSpeed, 1, 50) * 16) + Vector3.new(0, nexusVertHold * math.clamp(nexusSpeed, 1, 50) * 16, 0)
+		nexusBv.Velocity, hrp.AssemblyLinearVelocity = vel, vel
+	end)
+end
+local function destroyNexusGui()
+	stopNexusLoop()
+	if nexusCharConn then nexusCharConn:Disconnect(); nexusCharConn = nil end
+	if nexusGuiInstance then pcall(function() nexusGuiInstance:Destroy() end); nexusGuiInstance = nil end
+	destroyGui("NexusFlyGui")
+	if nexusTglBtn then nexusTglBtn.Text = "FLY GUI: TẮT"; nexusTglBtn.BackgroundColor3 = Color3.fromRGB(16,54,38) end
+end
+local function createNexusGui()
+	destroyNexusGui()
+	nexusGuiInstance = new("ScreenGui", {Name="NexusFlyGui", ResetOnSpawn=false, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local main = rad(new("Frame", {Size=UDim2.new(0,232,0,96), Position=UDim2.new(0.28,0,0.35,0), BackgroundColor3=Color3.fromRGB(14,14,16), BorderSizePixel=1, BorderColor3=Color3.fromRGB(42,42,48), Active=true, Draggable=true}, nexusGuiInstance), 4)
+	local topRow = new("Frame", {Size=UDim2.new(1,0,0,28), BackgroundColor3=Color3.fromRGB(18,18,21), BorderSizePixel=0}, main)
+	local closeBtn = new("TextButton", {Size=UDim2.new(0,34,1,0), BackgroundColor3=Color3.fromRGB(22,22,26), BorderSizePixel=1, BorderColor3=Color3.fromRGB(45,45,52), Text="X", TextColor3=Color3.fromRGB(235,235,240), Font=Enum.Font.GothamBold, TextSize=13}, topRow)
+	local bodyRow = new("Frame", {Size=UDim2.new(1,0,1,-28), Position=UDim2.new(0,0,0,28), BackgroundTransparency=1}, main)
+	local leftGrid = new("Frame", {Size=UDim2.new(0,92,1,0), BackgroundTransparency=1}, bodyRow)
+	local function mkPad(txt, x, y) return new("TextButton", {Size=UDim2.new(0,46,0,34), Position=UDim2.new(0,x,0,y), BackgroundColor3=Color3.fromRGB(20,20,24), BorderSizePixel=1, BorderColor3=Color3.fromRGB(48,48,56), Text=txt, TextColor3=Color3.fromRGB(240,240,245), Font=Enum.Font.Gotham, TextSize=13}, leftGrid) end
+	local upBtn, plusBtn, downBtn, minusBtn = mkPad("up",0,0), mkPad("+",46,0), mkPad("down",0,34), mkPad("-",46,34)
+	local rightPanel = new("Frame", {Size=UDim2.new(1,-92,1,0), Position=UDim2.new(0,92,0,0), BackgroundColor3=Color3.fromRGB(16,16,19), BorderSizePixel=1, BorderColor3=Color3.fromRGB(42,42,48)}, bodyRow)
+	new("TextLabel", {Size=UDim2.new(1,0,0,24), Position=UDim2.new(0,0,0,2), BackgroundTransparency=1, Text="Fly GUI", TextColor3=Color3.fromRGB(245,245,250), Font=Enum.Font.GothamMedium, TextSize=15}, rightPanel)
+	local speedLbl = new("TextLabel", {Size=UDim2.new(1,-6,0,20), Position=UDim2.new(0,3,0,25), BackgroundTransparency=1, Text=tostring(nexusSpeed), TextColor3=Color3.fromRGB(235,235,240), Font=Enum.Font.GothamBold, TextSize=14, TextWrapped=true}, rightPanel)
+	local flyBtn = rad(new("TextButton", {Size=UDim2.new(0,56,0,20), Position=UDim2.new(0.5,-28,1,-22), BackgroundColor3=Color3.fromRGB(36,36,42), BorderSizePixel=1, BorderColor3=Color3.fromRGB(70,70,82), Text="fly", TextColor3=Color3.fromRGB(220,220,230), Font=Enum.Font.GothamMedium, TextSize=12}, rightPanel), 4)
+	local tok = 0
+	local function syncFly()
+		flyBtn.BackgroundColor3 = nexusFlyEnabled and Color3.fromRGB(45,165,85) or Color3.fromRGB(36,36,42)
+		flyBtn.TextColor3 = nexusFlyEnabled and Color3.fromRGB(255,255,255) or Color3.fromRGB(220,220,230)
+		flyBtn.Text = nexusFlyEnabled and "fly: on" or "fly"
+	end
+	plusBtn.MouseButton1Click:Connect(function() if nexusSpeed < 50 then nexusSpeed += 1; tok += 1; speedLbl.Text = tostring(nexusSpeed); speedLbl.TextColor3 = Color3.fromRGB(235,235,240) end end)
+	minusBtn.MouseButton1Click:Connect(function()
+		if nexusSpeed > 1 then nexusSpeed -= 1; tok += 1; speedLbl.Text = tostring(nexusSpeed); speedLbl.TextColor3 = Color3.fromRGB(235,235,240)
+		else
+			nexusSpeed = 1; tok += 1; local cTok = tok; speedLbl.Text = "cannot be less than 1"; speedLbl.TextColor3 = Color3.fromRGB(255,195,90)
+			task.delay(1.1, function() if cTok == tok and speedLbl and speedLbl.Parent then speedLbl.Text = tostring(nexusSpeed); speedLbl.TextColor3 = Color3.fromRGB(235,235,240) end end)
+		end
+	end)
+	for btn, dir in pairs({[upBtn]=1, [downBtn]=-1}) do
+		btn.MouseButton1Down:Connect(function() nexusVertHold = dir end)
+		local function r() if nexusVertHold == dir then nexusVertHold = 0 end end
+		btn.MouseButton1Up:Connect(r); btn.MouseLeave:Connect(r)
+	end
+	flyBtn.MouseButton1Click:Connect(function()
+		if not nexusFlyEnabled then nexusFlyEnabled = true; syncFly(); ensureNexusForces(); startNexusLoop() else stopNexusLoop(); syncFly() end
+	end)
+	closeBtn.MouseButton1Click:Connect(destroyNexusGui)
+	nexusCharConn = LP.CharacterAdded:Connect(function(nc)
+		cleanNexusForces()
+		if nexusFlyEnabled and nc:WaitForChild("Humanoid",10) and nc:WaitForChild("HumanoidRootPart",10) then task.wait(0.15); ensureNexusForces() end
+	end)
+end
+nexusTglBtn = addTgl(CScript, "FLY GUI", 5, function(st) if st then createNexusGui() else destroyNexusGui() end end)
+
+addLbl(CScript, "Position System:", 38)
+local sPos, SaveP = nil
+SaveP = mkBtn(CScript, 0, 58, 0.48, 28, "💾 Position Save", Color3.fromRGB(16,58,42), 11, function()
+	local h = hrpOf(LP); if h then sPos = h.CFrame; SaveP.Text = "💾 Đã Lưu!"; task.delay(1, function() SaveP.Text = "💾 Position Save" end) end
+end)
+mkBtn(CScript, 0.52, 58, 0.48, 28, "⚡ Position TP", Color3.fromRGB(16,58,42), 11, function() local h = hrpOf(LP); if h and sPos then h.CFrame = sPos end end)
+
+local function mkPlayerPicker(lbl, y, hScroll, icon)
+	addLbl(CScript, lbl, y)
+	local sc = rad(new("ScrollingFrame", {Size=UDim2.new(1,0,0,hScroll), Position=UDim2.new(0,0,0,y+20), BackgroundColor3=Color3.fromRGB(12,44,31), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,150), ScrollBarThickness=3, ScrollBarImageColor3=Color3.fromRGB(60,235,140)}, CScript), 6)
+	stk(sc, Color3.fromRGB(55,210,125), 1, 0.65)
+	local sel = nil
+	local function refresh()
+		for _, ch in ipairs(sc:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
+		sel = nil; local py = 2
+		for _, p in ipairs(Plrs:GetPlayers()) do
+			if p ~= LP then
+				local b = rad(new("TextButton", {Size=UDim2.new(1,-6,0,24), Position=UDim2.new(0,3,0,py), BackgroundColor3=Color3.fromRGB(16,54,38), Text=icon.." "..p.Name, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=11}, sc), 4)
+				b.MouseButton1Click:Connect(function()
+					sel = p; for _, x in ipairs(sc:GetChildren()) do if x:IsA("TextButton") then x.BackgroundColor3 = Color3.fromRGB(16,54,38) end end
+					b.BackgroundColor3 = Color3.fromRGB(36,145,88)
+				end)
+				py += 26
+			end
+		end
+		sc.CanvasSize = UDim2.new(0,0,0,py)
+	end
+	refresh(); return refresh, function() return sel end
+end
+
+local refTP, getTP = mkPlayerPicker("TP Player:", 92, 76, "👤")
+mkBtn(CScript, 0, 192, 0.48, 26, "🔄 Cập Nhật", Color3.fromRGB(16,58,42), 10, refTP)
+mkBtn(CScript, 0.52, 192, 0.48, 26, "🚀 Dịch Chuyển", Color3.fromRGB(24,82,58), 10, function()
+	local t, h = getTP(), hrpOf(LP); if t and hrpOf(t) and h then h.CFrame = hrpOf(t).CFrame end
+end)
+
+local refFol, getFol = mkPlayerPicker("Follow Player:", 224, 76, "🏃")
+local folConn = nil
+mkBtn(CScript, 0, 324, 0.31, 26, "🔄 Cập Nhật", Color3.fromRGB(16,58,42), 10, refFol)
+mkBtn(CScript, 0.34, 324, 0.32, 26, "▶️ Bắt Đầu", Color3.fromRGB(36,145,88), 10, function()
+	if folConn then folConn:Disconnect(); folConn = nil end
+	local t = getFol(); if not t then return end
+	folConn = RunSvc.Heartbeat:Connect(function()
+		local mh, mr, tr = humOf(LP), hrpOf(LP), hrpOf(t)
+		if mh and mr and tr and (mr.Position - tr.Position).Magnitude > 4 then
+			mh:MoveTo(tr.Position); if tr.Position.Y > mr.Position.Y + 3 then mh.Jump = true end
+		end
+	end)
+end)
+mkBtn(CScript, 0.69, 324, 0.31, 26, "⏹️ Dừng", Color3.fromRGB(120,28,28), 10, function() if folConn then folConn:Disconnect(); folConn = nil end end)
+
+local espOn = false
+local function makeEsp(plr)
+	if plr == LP then return end
+	local function addTag(char)
+		if char:FindFirstChild("EspTag") then return end
+		local hrp, hum = char:WaitForChild("HumanoidRootPart", 5), char:WaitForChild("Humanoid", 5); if not hrp or not hum then return end
+		local bg = new("BillboardGui", {Name="EspTag", Adornee=hrp, Size=UDim2.new(0,220,0,50), StudsOffset=Vector3.new(0,3,0), AlwaysOnTop=true}, hrp)
+		local txt = new("TextLabel", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, TextColor3=Color3.fromRGB(255,255,255), TextStrokeTransparency=0.2, Font=Enum.Font.GothamBold, TextSize=11, TextWrapped=true}, bg)
+		task.spawn(function()
+			while bg and bg.Parent and char and hrp and hum do
+				RunSvc.RenderStepped:Wait(); local myHrp = hrpOf(LP)
+				if myHrp then txt.Text = "Name: "..plr.Name.." | HP: "..math.floor(hum.Health).." | Studs: "..math.floor((myHrp.Position - hrp.Position).Magnitude) end
+			end
+		end)
+	end
+	if plr.Character then addTag(plr.Character) end
+	plr.CharacterAdded:Connect(addTag)
+end
+local EspBtn = mkBtn(CScript, 0, 356, 1, 28, "ESP (Name/HP/Studs): TẮT", Color3.fromRGB(16,54,38), 11)
+EspBtn.MouseButton1Click:Connect(function()
+	espOn = not espOn
+	EspBtn.Text = "ESP (Name/HP/Studs): "..(espOn and "BẬT" or "TẮT")
+	EspBtn.BackgroundColor3 = espOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+	if espOn then for _, p in ipairs(Plrs:GetPlayers()) do makeEsp(p) end; Plrs.PlayerAdded:Connect(makeEsp)
+	else for _, p in ipairs(Plrs:GetPlayers()) do local h = hrpOf(p); local t = h and h:FindFirstChild("EspTag"); if t then t:Destroy() end end end
+end)
+
+-- AUTO AIM HEAD (SMOOTH + CACHE)
+local aimGui, aimReticle, aimConn = nil
+local aimEnabled, aimCrosshairOn, aimByNameOn, aimTargetName = false, false, false, ""
+local aimNpcCache, aimLastScan = {}, 0
+
+local function destroyAutoAim()
+	aimEnabled, aimCrosshairOn, aimByNameOn = false, false, false
+	table.clear(aimNpcCache); aimLastScan = 0
+	if aimConn then aimConn:Disconnect(); aimConn = nil end
+	if aimGui then pcall(function() aimGui:Destroy() end); aimGui = nil end
+	destroyGui("USBAutoAimGui"); aimReticle = nil
+end
+local function getHeadPart(model)
+	if not model or not model.Parent then return nil end
+	local h = model:FindFirstChild("Head"); if h and h:IsA("BasePart") then return h end
+	for _, d in ipairs(model:GetDescendants()) do if d:IsA("BasePart") and d.Name:lower():find("head") then return d end end
+	return model:FindFirstChild("HumanoidRootPart")
+end
+local function refreshAimNpcs()
+	table.clear(aimNpcCache)
+	for _, d in ipairs(Wsp:GetDescendants()) do
+		if d:IsA("Model") and d ~= LP.Character and not Plrs:GetPlayerFromCharacter(d) then
+			local hum = d:FindFirstChildOfClass("Humanoid"); local head = hum and hum.Health > 0 and getHeadPart(d)
+			if head then table.insert(aimNpcCache, {hum=hum, head=head, nameLower=d.Name:lower()}) end
+		end
+	end
+end
+local function findAimHead(originPos)
+	local filter = aimByNameOn and aimTargetName:gsub("^%s*(.-)%s*$","%1"):lower() or ""
+	local namedHead, bestNamed, nearHead, bestNear = nil, math.huge, nil, math.huge
+	for _, p in ipairs(Plrs:GetPlayers()) do
+		if p ~= LP and p.Character then
+			local hum = p.Character:FindFirstChildOfClass("Humanoid"); local head = hum and hum.Health > 0 and getHeadPart(p.Character)
+			if head then
+				local d = (head.Position - originPos).Magnitude
+				if d < bestNear then bestNear, nearHead = d, head end
+				if filter ~= "" and (p.Name:lower():find(filter,1,true) or p.DisplayName:lower():find(filter,1,true)) and d < bestNamed then bestNamed, namedHead = d, head end
+			end
+		end
+	end
+	if os.clock() - aimLastScan >= 0.35 then aimLastScan = os.clock(); pcall(refreshAimNpcs) end
+	for i = #aimNpcCache, 1, -1 do
+		local it, head = aimNpcCache[i], aimNpcCache[i].head
+		if not head or not head.Parent or not it.hum or not it.hum.Parent or it.hum.Health <= 0 then table.remove(aimNpcCache, i)
+		else
+			local d = (head.Position - originPos).Magnitude
+			if d < bestNear then bestNear, nearHead = d, head end
+			if filter ~= "" and it.nameLower:find(filter,1,true) and d < bestNamed then bestNamed, namedHead = d, head end
+		end
+	end
+	return (filter ~= "" and namedHead) or nearHead
+end
+local function buildCrosshair(parent, vis)
+	local holder = new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,41,0,41), Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=1, BorderSizePixel=0, Visible=vis~=false, ZIndex=10}, parent)
+	for _, a in ipairs({{2,11,0.5,1,0,-5},{2,11,0.5,0,0,5},{11,2,1,0.5,-5,0},{11,2,0,0.5,5,0}}) do
+		local b = new("Frame", {AnchorPoint=Vector2.new(a[3],a[4]), Size=UDim2.new(0,a[1],0,a[2]), Position=UDim2.new(0.5,a[5],0.5,a[6]), BackgroundColor3=Color3.fromRGB(255,255,255), BackgroundTransparency=0.05, BorderSizePixel=0}, holder)
+		stk(b, Color3.fromRGB(0,0,0), 1, 0.35)
+	end
+	new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,2,0,2), Position=UDim2.new(0.5,0,0.5,0), BackgroundColor3=Color3.fromRGB(255,255,255), BorderSizePixel=0}, holder)
+	return holder
+end
+local function createAutoAimGui()
+	destroyAutoAim()
+	aimGui = new("ScreenGui", {Name="USBAutoAimGui", ResetOnSpawn=false, IgnoreGuiInset=true, DisplayOrder=999998, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	aimReticle = buildCrosshair(aimGui, false)
+	local panel = rad(new("Frame", {Size=UDim2.new(0,216,0,174), Position=UDim2.new(0.14,0,0.22,0), BackgroundColor3=Color3.fromRGB(9,34,24), BackgroundTransparency=0.06, BorderSizePixel=0, Active=true, Draggable=true}, aimGui), 10)
+	stk(panel, Color3.fromRGB(60,235,140), 1.8)
+	new("TextLabel", {Size=UDim2.new(1,-34,0,26), Position=UDim2.new(0,10,0,2), BackgroundTransparency=1, Text="AUTO AIM HEAD", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left}, panel)
+	local cls = rad(new("TextButton", {Size=UDim2.new(0,22,0,22), Position=UDim2.new(1,-28,0,4), BackgroundColor3=Color3.fromRGB(120,28,28), Text="x", TextColor3=Color3.fromRGB(255,220,220), Font=Enum.Font.GothamBold, TextSize=12}, panel), 5)
+	cls.MouseButton1Click:Connect(destroyAutoAim)
+
+	local function pBtn(y, txt, cb)
+		local b = rad(new("TextButton", {Size=UDim2.new(1,-16,0,26), Position=UDim2.new(0,8,0,y), BackgroundColor3=Color3.fromRGB(16,54,38), Text=txt, TextColor3=Color3.fromRGB(175,245,205), Font=Enum.Font.GothamBold, TextSize=10}, panel), 6)
+		stk(b, Color3.fromRGB(60,235,140), 1, 0.55); b.MouseButton1Click:Connect(function() cb(b) end); return b
+	end
+	pBtn(30, "🎯 Hỗ trợ tầm ngắm: TẮT", function(b)
+		aimCrosshairOn = not aimCrosshairOn; if aimReticle then aimReticle.Visible = aimCrosshairOn end
+		b.Text = "🎯 Hỗ trợ tầm ngắm: "..(aimCrosshairOn and "BẬT" or "TẮT"); b.BackgroundColor3 = aimCrosshairOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+	end)
+	local aimBtn; aimBtn = pBtn(60, "🔫 Tự động ngắm đầu: TẮT", function(b)
+		aimEnabled = not aimEnabled; b.Text = "🔫 Tự động ngắm đầu: "..(aimEnabled and "BẬT" or "TẮT"); b.BackgroundColor3 = aimEnabled and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+	end)
+	local nameBox = rad(new("TextBox", {Size=UDim2.new(1,-16,0,26), Position=UDim2.new(0,8,0,90), BackgroundColor3=Color3.fromRGB(12,44,31), Text=aimTargetName, PlaceholderText="Ghi tên Player / NPC...", TextColor3=Color3.fromRGB(235,255,245), PlaceholderColor3=Color3.fromRGB(125,180,150), Font=Enum.Font.Gotham, TextSize=10, ClearTextOnFocus=false}, panel), 6)
+	stk(nameBox, Color3.fromRGB(55,210,125), 1, 0.65); nameBox.FocusLost:Connect(function() aimTargetName = nameBox.Text end)
+	pBtn(120, "🏷️ Khóa theo tên: TẮT", function(b)
+		aimTargetName = nameBox.Text; aimByNameOn = not aimByNameOn
+		if aimByNameOn and not aimEnabled then aimEnabled = true; aimBtn.Text = "🔫 Tự động ngắm đầu: BẬT"; aimBtn.BackgroundColor3 = Color3.fromRGB(36,145,88) end
+		b.Text = "🏷️ Khóa theo tên: "..(aimByNameOn and "BẬT" or "TẮT"); b.BackgroundColor3 = aimByNameOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+	end)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,16), Position=UDim2.new(0,8,0,150), BackgroundTransparency=1, Text="Bám đầu Player / NPC / Quái (mọi khoảng cách)", TextColor3=Color3.fromRGB(150,225,185), Font=Enum.Font.Gotham, TextSize=9, TextXAlignment=Enum.TextXAlignment.Left}, panel)
+
+	aimConn = RunSvc.RenderStepped:Connect(function(dt)
+		if not aimEnabled then return end
+		local cam, myHrp = Wsp.CurrentCamera, hrpOf(LP); if not cam or not myHrp then return end
+		local head = findAimHead(myHrp.Position)
+		if head and head.Parent then
+			cam.CameraType = Enum.CameraType.Custom
+			cam.CFrame = cam.CFrame:Lerp(CFrame.lookAt(cam.CFrame.Position, head.Position), math.clamp(dt * 28, 0.2, 0.92))
+		end
+	end)
+end
+addTgl(CScript, "Auto Aim Head", 390, function(st) if st then createAutoAimGui() else destroyAutoAim() end end)
+
+addLbl(CScript, "Spectate Player:", 424)
+local PScroll = rad(new("ScrollingFrame", {Size=UDim2.new(1,0,0,96), Position=UDim2.new(0,0,0,444), BackgroundColor3=Color3.fromRGB(12,44,31), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,200), ScrollBarThickness=3, ScrollBarImageColor3=Color3.fromRGB(60,235,140)}, CScript), 6)
+stk(PScroll, Color3.fromRGB(55,210,125), 1, 0.65)
+local function updatePList()
+	for _, ch in ipairs(PScroll:GetChildren()) do if ch:IsA("TextButton") then ch:Destroy() end end
+	local y = 2
+	for _, p in ipairs(Plrs:GetPlayers()) do
+		if p ~= LP then
+			local b = rad(new("TextButton", {Size=UDim2.new(1,-6,0,24), Position=UDim2.new(0,3,0,y), BackgroundColor3=Color3.fromRGB(16,54,38), Text="🎯 "..p.Name, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=11}, PScroll), 4)
+			b.MouseButton1Click:Connect(function() local h = humOf(p); if h then Wsp.CurrentCamera.CameraSubject = h end end); y += 26
+		end
+	end
+	PScroll.CanvasSize = UDim2.new(0,0,0,y)
+end
+mkBtn(CScript, 0, 546, 0.48, 28, "🔄 Cập Nhật", Color3.fromRGB(16,58,42), 11, updatePList)
+mkBtn(CScript, 0.52, 546, 0.48, 28, "🛑 Tắt Spectate", Color3.fromRGB(120,28,28), 11, function() local h = humOf(LP); if h then Wsp.CurrentCamera.CameraSubject = h; Wsp.CurrentCamera.CameraType = Enum.CameraType.Custom end end)
+updatePList()
+
+-- 3. SUPPORT (RADAR + TOOLS)
+local RADAR_RADIUS_STUDS, MIN_SZ, MAX_SZ = 120, 100, 500
+local radarGui, radarCtrl, radarBody, radarFrame, radarStatusLbl, radarInnerClip, radarConn = nil
+local radarBlipPool, radarCachedEntities = {}, {}
+local radarActiveBlips, radarLastScan, pulseTimer = 0, 0, 0
+local rState = {radarOn=true, soundOn=true, locked=false, size=180, tagOn=false, filterOn=true, showP=true, showNQ=true, showX=true}
+local pulseSound = new("Sound", {Name="USBHubRadarPulse", SoundId="rbxassetid://9118823101", Volume=0.65}, SndSvc)
+
+local function hideRadarUnusedBlips()
+	for i = radarActiveBlips + 1, #radarBlipPool do
+		local b = radarBlipPool[i]; if b then b.Visible = false; local tl = b:FindFirstChild("TagLbl"); if tl then tl.Visible = false end end
+	end
+end
+local function getRadarBlip(kind, color, tagText)
+	radarActiveBlips += 1; local dot = radarBlipPool[radarActiveBlips]
+	if not dot and radarInnerClip then
+		dot = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,7,0,7), BorderSizePixel=0, ZIndex=4}, radarInnerClip), 999)
+		new("UIStroke", {Name="DotStroke", Thickness=1.1, Transparency=0.15}, dot)
+		new("TextLabel", {Name="TagLbl", AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(0,84,0,12), Position=UDim2.new(0.5,0,1,1), BackgroundTransparency=1, Text="", TextColor3=Color3.fromRGB(235,255,245), TextStrokeTransparency=0.25, Font=Enum.Font.GothamBold, TextSize=8, ZIndex=7, Visible=false}, dot)
+		radarBlipPool[radarActiveBlips] = dot
+	end
+	if not dot then return nil end
+	dot.Name, dot.BackgroundColor3, dot.Visible = kind.."Blip", color, true
+	local s = dot:FindFirstChild("DotStroke")
+	if s then s.Color = kind=="DeadPlayer" and Color3.fromRGB(215,220,230) or kind=="Entity" and Color3.fromRGB(255,165,165) or Color3.fromRGB(185,255,210) end
+	local tl = dot:FindFirstChild("TagLbl"); if tl then tl.Visible = rState.tagOn and (tagText ~= nil); if tl.Visible then tl.Text = tagText end end
+	return dot
+end
+local function getRadarOriginCFrame()
+	local cam, hrp = Wsp.CurrentCamera, hrpOf(LP)
+	if cam and hrp then
+		local flat = Vector3.new(cam.CFrame.LookVector.X, 0, cam.CFrame.LookVector.Z)
+		return flat.Magnitude > 0.001 and CFrame.lookAt(hrp.Position, hrp.Position + flat.Unit) or CFrame.new(hrp.Position)
+	end
+	return hrp and hrp.CFrame
+end
+local function worldToRadarCoord(originCF, targetPos, halfRadiusPx)
+	local flat = Vector3.new(targetPos.X - originCF.Position.X, 0, targetPos.Z - originCF.Position.Z)
+	if flat.Magnitude > RADAR_RADIUS_STUDS or flat.Magnitude < 0.05 then return nil end
+	local loc = originCF:VectorToObjectSpace(flat)
+	local nx, ny = math.clamp(loc.X / RADAR_RADIUS_STUDS, -1, 1), math.clamp(loc.Z / RADAR_RADIUS_STUDS, -1, 1)
+	if nx*nx + ny*ny > 1 then return nil end
+	return UDim2.new(0.5 + (nx*(halfRadiusPx-5))/halfRadiusPx*0.5, 0, 0.5 + (ny*(halfRadiusPx-5))/halfRadiusPx*0.5, 0)
+end
+local function findModelRootPart(m) return m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("Torso") or m:FindFirstChild("UpperTorso") or m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart") end
+local function refreshRadarEntities()
+	table.clear(radarCachedEntities); local names = {}
+	for _, p in ipairs(Plrs:GetPlayers()) do if p ~= LP then names[p.Name:lower()], names[p.DisplayName:lower()] = true, true end end
+	for _, d in ipairs(Wsp:GetDescendants()) do
+		if d:IsA("Model") and d ~= LP.Character and Plrs:GetPlayerFromCharacter(d) ~= LP then
+			local hum, root = d:FindFirstChildOfClass("Humanoid"), findModelRootPart(d)
+			if root then
+				local isPlr = Plrs:GetPlayerFromCharacter(d) ~= nil or names[d.Name:lower()] == true
+				if isPlr and hum and hum.Health <= 0 then table.insert(radarCachedEntities, {root=root, kind="DeadPlayer", label=d.Name})
+				elseif not isPlr and hum and hum.Health > 0 then table.insert(radarCachedEntities, {root=root, kind="Entity", label=d.Name}) end
+			end
+		end
+	end
+end
+local function destroyRadar()
+	if radarConn then radarConn:Disconnect(); radarConn = nil end
+	pulseSound:Stop(); pulseTimer = 0; table.clear(radarBlipPool); table.clear(radarCachedEntities)
+	radarActiveBlips, radarLastScan = 0, 0; radarCtrl, radarBody, radarFrame, radarStatusLbl, radarInnerClip = nil
+	if radarGui then pcall(function() radarGui:Destroy() end); radarGui = nil end; destroyGui("USBHubRadarGui")
+end
+local function createRadar()
+	destroyRadar()
+	radarGui = new("ScreenGui", {Name="USBHubRadarGui", ResetOnSpawn=false, IgnoreGuiInset=true, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	radarCtrl = rad(new("Frame", {Size=UDim2.new(0,224,0,322), Position=UDim2.new(0.12,0,0.16,0), BackgroundColor3=Color3.fromRGB(9,34,24), BackgroundTransparency=0.06, BorderSizePixel=0, Active=true, Draggable=true}, radarGui), 10)
+	stk(radarCtrl, Color3.fromRGB(60,235,140), 1.8)
+	new("TextLabel", {Size=UDim2.new(1,-68,0,28), Position=UDim2.new(0,12,0,2), BackgroundTransparency=1, Text="RADAR CONTROL", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left}, radarCtrl)
+	local minBtn = rad(new("TextButton", {Size=UDim2.new(0,22,0,22), Position=UDim2.new(1,-56,0,5), BackgroundColor3=Color3.fromRGB(16,58,42), Text="-", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=13}, radarCtrl), 5)
+	local clsBtn = rad(new("TextButton", {Size=UDim2.new(0,22,0,22), Position=UDim2.new(1,-28,0,5), BackgroundColor3=Color3.fromRGB(120,28,28), Text="x", TextColor3=Color3.fromRGB(255,220,220), Font=Enum.Font.GothamBold, TextSize=12}, radarCtrl), 5)
+	radarBody = new("Frame", {Size=UDim2.new(1,-16,1,-36), Position=UDim2.new(0,8,0,32), BackgroundTransparency=1}, radarCtrl)
+
+	local function mkCtrlBtn(txt, y, bg, fg, cb)
+		local b = rad(new("TextButton", {Size=UDim2.new(1,0,0,26), Position=UDim2.new(0,0,0,y), BackgroundColor3=bg, Text=txt, TextColor3=fg, Font=Enum.Font.GothamBold, TextSize=10}, radarBody), 6)
+		stk(b, Color3.fromRGB(60,235,140), 1, 0.55); b.MouseButton1Click:Connect(function() cb(b) end); return b
+	end
+	local lockBtn = mkCtrlBtn("", 0, Color3.fromRGB(92,58,18), Color3.fromRGB(255,220,140), function(b)
+		rState.locked = not rState.locked; if radarFrame then radarFrame.Draggable = not rState.locked end
+		b.Text = rState.locked and "🔒 Lock (Đã khóa)" or "🔓 No Lock (Kéo được)"
+		b.BackgroundColor3 = rState.locked and Color3.fromRGB(115,72,20) or Color3.fromRGB(92,58,18)
+	end)
+	lockBtn.Text = rState.locked and "🔒 Lock (Đã khóa)" or "🔓 No Lock (Kéo được)"
+	mkCtrlBtn(rState.radarOn and "📡 Radar: BẬT" or "📡 Radar: TẮT", 30, Color3.fromRGB(16,54,38), Color3.fromRGB(175,245,205), function(b)
+		rState.radarOn = not rState.radarOn; if radarFrame then radarFrame.Visible = rState.radarOn end; b.Text = rState.radarOn and "📡 Radar: BẬT" or "📡 Radar: TẮT"
+	end)
+	mkCtrlBtn(rState.soundOn and "🔊 Sound: BẬT" or "🔇 Sound: TẮT", 60, Color3.fromRGB(16,54,38), Color3.fromRGB(175,245,205), function(b)
+		rState.soundOn = not rState.soundOn; if not rState.soundOn then pulseSound:Stop() end; b.Text = rState.soundOn and "🔊 Sound: BẬT" or "🔇 Sound: TẮT"
+	end)
+	mkCtrlBtn(rState.tagOn and "🏷️ Tên/Studs: BẬT" or "🏷️ Tên/Studs: TẮT", 90, rState.tagOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38), Color3.fromRGB(220,255,235), function(b)
+		rState.tagOn = not rState.tagOn; b.Text = rState.tagOn and "🏷️ Tên/Studs: BẬT" or "🏷️ Tên/Studs: TẮT"; b.BackgroundColor3 = rState.tagOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+	end)
+
+	local pBtn, nqBtn, xBtn
+	local function syncDotBtns()
+		local pV, nqV, xV = rState.filterOn and rState.showP, rState.filterOn and rState.showNQ, rState.filterOn and rState.showX
+		pBtn.Text, pBtn.BackgroundColor3 = "P: "..(pV and "BẬT" or "TẮT"), pV and Color3.fromRGB(24,110,66) or Color3.fromRGB(55,25,25)
+		nqBtn.Text, nqBtn.BackgroundColor3 = "N/Q: "..(nqV and "BẬT" or "TẮT"), nqV and Color3.fromRGB(110,32,32) or Color3.fromRGB(55,25,25)
+		xBtn.Text, xBtn.BackgroundColor3 = "X: "..(xV and "BẬT" or "TẮT"), xV and Color3.fromRGB(35,45,55) or Color3.fromRGB(55,25,25)
+	end
+	mkCtrlBtn(rState.filterOn and "🎛️ Lọc Chấm: BẬT" or "🎛️ Lọc Chấm: TẮT", 120, rState.filterOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38), Color3.fromRGB(220,255,235), function(b)
+		rState.filterOn = not rState.filterOn; b.Text = rState.filterOn and "🎛️ Lọc Chấm: BẬT" or "🎛️ Lọc Chấm: TẮT"; b.BackgroundColor3 = rState.filterOn and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38); syncDotBtns()
+	end)
+	local function mkDotTgl(x, w, cb)
+		local b = rad(new("TextButton", {Size=UDim2.new(w,-2,0,26), Position=UDim2.new(x,0,0,150), BackgroundColor3=Color3.fromRGB(24,110,66), Text="", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10}, radarBody), 6)
+		stk(b, Color3.fromRGB(60,235,140), 1, 0.55); b.MouseButton1Click:Connect(cb); return b
+	end
+	pBtn = mkDotTgl(0, 0.34, function() rState.filterOn, rState.showP = true, not rState.showP; syncDotBtns() end)
+	nqBtn = mkDotTgl(0.34, 0.34, function() rState.filterOn, rState.showNQ = true, not rState.showNQ; syncDotBtns() end)
+	xBtn = mkDotTgl(0.68, 0.32, function() rState.filterOn, rState.showX = true, not rState.showX; syncDotBtns() end)
+	syncDotBtns()
+
+	local szBox = rad(new("Frame", {Size=UDim2.new(1,0,0,54), Position=UDim2.new(0,0,0,182), BackgroundColor3=Color3.fromRGB(12,44,31), BorderSizePixel=0, Active=true}, radarBody), 6)
+	local szLbl = new("TextLabel", {Size=UDim2.new(1,0,0,20), Position=UDim2.new(0,0,0,4), BackgroundTransparency=1, Text="Size: "..rState.size.." (100-500)", TextColor3=Color3.fromRGB(195,255,220), Font=Enum.Font.GothamBold, TextSize=10}, szBox)
+	local track = rad(new("Frame", {Size=UDim2.new(1,-24,0,8), Position=UDim2.new(0,12,0,33), BackgroundColor3=Color3.fromRGB(20,76,52), BorderSizePixel=0, Active=true}, szBox), 999)
+	local initA = (rState.size - MIN_SZ) / (MAX_SZ - MIN_SZ)
+	local fill = rad(new("Frame", {Size=UDim2.new(initA,0,1,0), BackgroundColor3=Color3.fromRGB(60,235,140), BorderSizePixel=0}, track), 999)
+	local thumb = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,14,0,14), Position=UDim2.new(initA,0,0.5,0), BackgroundColor3=Color3.fromRGB(235,255,245), BorderSizePixel=0}, track), 999)
+
+	radarFrame = rad(new("Frame", {AnchorPoint=Vector2.new(1,0.5), Size=UDim2.new(0,rState.size,0,rState.size), Position=UDim2.new(1,-18,0.44,0), BackgroundColor3=Color3.fromRGB(6,22,15), BackgroundTransparency=0.22, BorderSizePixel=0, Active=true, Draggable=not rState.locked, Visible=rState.radarOn}, radarGui), 999)
+	stk(radarFrame, Color3.fromRGB(60,235,140), 2.2)
+	for i = 0, 59 do
+		local maj, th = (i % 5 == 0), new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(1,0,1,0), Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=1, Rotation=i*6}, radarFrame)
+		new("Frame", {AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(0,maj and 2 or 1,0,maj and 7 or 4), Position=UDim2.new(0.5,0,0,1), BackgroundColor3=Color3.fromRGB(85,245,155), BackgroundTransparency=maj and 0.1 or 0.45, BorderSizePixel=0}, th)
+	end
+	radarInnerClip = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(1,-16,1,-16), Position=UDim2.new(0.5,0,0.5,0), BackgroundColor3=Color3.fromRGB(8,28,19), BackgroundTransparency=0.35, BorderSizePixel=0, ClipsDescendants=true}, radarFrame), 999)
+	for _, r in ipairs({0.33, 0.66, 0.96}) do stk(rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(r,0,r,0), Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=1, BorderSizePixel=0}, radarInnerClip), 999), Color3.fromRGB(55,210,125), 1, 0.68) end
+	for _, sz in ipairs({UDim2.new(1,0,0,1), UDim2.new(0,1,1,0)}) do new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=sz, Position=UDim2.new(0.5,0,0.5,0), BackgroundColor3=Color3.fromRGB(55,210,125), BackgroundTransparency=0.72, BorderSizePixel=0}, radarInnerClip) end
+	radarStatusLbl = new("TextLabel", {AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(1,44,0,18), Position=UDim2.new(0.5,0,1,4), BackgroundTransparency=1, Text="SCANNING", TextColor3=Color3.fromRGB(95,245,160), Font=Enum.Font.GothamBold, TextSize=10}, radarFrame)
+	new("TextLabel", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,16,0,16), Position=UDim2.new(0.5,0,0.5,0), BackgroundTransparency=1, Text="^", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBlack, TextSize=14, ZIndex=6}, radarInnerClip)
+
+	local function applyRadarSize(v)
+		rState.size = math.clamp(math.floor(v), MIN_SZ, MAX_SZ); radarFrame.Size = UDim2.new(0, rState.size, 0, rState.size)
+		szLbl.Text = "Size: "..rState.size.." (100-500)"; local a = (rState.size - MIN_SZ) / (MAX_SZ - MIN_SZ)
+		fill.Size, thumb.Position = UDim2.new(a,0,1,0), UDim2.new(a,0,0.5,0)
+	end
+	local sliding = false
+	local function setSlide(x) applyRadarSize(MIN_SZ + math.clamp((x - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X), 0, 1) * (MAX_SZ - MIN_SZ)) end
+	track.InputBegan:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then sliding = true; setSlide(inp.Position.X) end end)
+	Uis.InputChanged:Connect(function(inp) if sliding and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then setSlide(inp.Position.X) end end)
+	Uis.InputEnded:Connect(function(inp) if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then sliding = false end end)
+
+	local mini = false
+	minBtn.MouseButton1Click:Connect(function() mini = not mini; radarBody.Visible = not mini; radarCtrl.Size = mini and UDim2.new(0,224,0,32) or UDim2.new(0,224,0,322) end)
+	clsBtn.MouseButton1Click:Connect(destroyRadar)
+
+	radarConn = RunSvc.RenderStepped:Connect(function(dt)
+		if not radarGui or not radarGui.Parent or not radarFrame or not radarInnerClip then return end
+		radarActiveBlips = 0; local cf = getRadarOriginCFrame()
+		if not cf then radarStatusLbl.Text = "NO SIGNAL"; hideRadarUnusedBlips(); return end
+		local halfPx, pC, eC, dC, nearest = (rState.size - 16) * 0.5, 0, 0, 0, math.huge
+		local allowP, allowNQ, allowX = (not rState.filterOn) or rState.showP, (not rState.filterOn) or rState.showNQ, (not rState.filterOn) or rState.showX
+		for _, plr in ipairs(Plrs:GetPlayers()) do
+			if plr ~= LP and plr.Character then
+				local r, h = findModelRootPart(plr.Character), plr.Character:FindFirstChildOfClass("Humanoid")
+				if r and h and h.Health > 0 then
+					local fd = Vector3.new(r.Position.X - cf.Position.X, 0, r.Position.Z - cf.Position.Z).Magnitude
+					if fd <= RADAR_RADIUS_STUDS and fd < nearest then nearest = fd end
+					if rState.radarOn and allowP then
+						local pos = worldToRadarCoord(cf, r.Position, halfPx)
+						local b = pos and getRadarBlip("Player", Color3.fromRGB(45,245,110), plr.Name.." ("..math.floor(fd).."s)")
+						if b then b.Position = pos; pC += 1 end
+					end
+				end
+			end
+		end
+		if os.clock() - radarLastScan >= 0.5 then radarLastScan = os.clock(); pcall(refreshRadarEntities) end
+		for i = #radarCachedEntities, 1, -1 do
+			local it = radarCachedEntities[i]
+			if not it.root or not it.root.Parent then table.remove(radarCachedEntities, i)
+			else
+				local fd = Vector3.new(it.root.Position.X - cf.Position.X, 0, it.root.Position.Z - cf.Position.Z).Magnitude
+				if it.kind == "Entity" and fd <= RADAR_RADIUS_STUDS and fd < nearest then nearest = fd end
+				local allowed = (it.kind == "DeadPlayer" and allowX) or (it.kind == "Entity" and allowNQ)
+				if rState.radarOn and allowed then
+					local ok, pos = pcall(worldToRadarCoord, cf, it.root.Position, halfPx)
+					if ok and pos then
+						local b = it.kind == "DeadPlayer" and getRadarBlip("DeadPlayer", Color3.fromRGB(16,16,20), (it.label or "X").." ("..math.floor(fd).."s)") or getRadarBlip("Entity", Color3.fromRGB(255,55,55), (it.label or "NPC").." ("..math.floor(fd).."s)")
+						if b then b.Position = pos; if it.kind == "DeadPlayer" then dC += 1 else eC += 1 end end
+					end
+				end
+			end
+		end
+		hideRadarUnusedBlips(); radarStatusLbl.Text = string.format("P:%d  NPC/Q:%d  X:%d", pC, eC, dC)
+		if rState.soundOn and nearest <= RADAR_RADIUS_STUDS then
+			local ratio = math.clamp(nearest / RADAR_RADIUS_STUDS, 0, 1); pulseTimer += dt
+			if pulseTimer >= (0.16 + ratio * 1.09) then pulseTimer = 0; pulseSound.PlaybackSpeed = 1.25 - ratio * 0.35; pulseSound:Play() end
+		else pulseTimer = 0 end
+	end)
+end
+addTgl(CSupport, "Radar", 5, function(st) if st then createRadar() else destroyRadar() end end)
+
+local function mkWin(name, w, h, title, titleCol)
+	if Cg:FindFirstChild(name) then Cg[name]:Destroy(); return nil end
+	local g = new("ScreenGui", {Name=name, ResetOnSpawn=false}, Cg)
+	local f = rad(new("Frame", {Size=UDim2.new(0,w,0,h), Position=UDim2.new(0.5,-w/2,0.4,-h/2), BackgroundColor3=Color3.fromRGB(9,34,24), Active=true, Draggable=true}, g), 8)
+	stk(f, Color3.fromRGB(60,235,140), 1.5)
+	new("TextLabel", {Size=UDim2.new(1,-30,0,28), Position=UDim2.new(0,10,0,0), BackgroundTransparency=1, Text=title, TextColor3=titleCol or Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left}, f)
+	local cl = rad(new("TextButton", {Size=UDim2.new(0,24,0,24), Position=UDim2.new(1,-28,0,2), BackgroundColor3=Color3.fromRGB(120,28,28), Text="X", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10}, f), 4)
+	cl.MouseButton1Click:Connect(function() g:Destroy() end); return g, f
+end
+
+mkBtn(CSupport, 0, 40, 1, 30, "💬 Mickey Chat", Color3.fromRGB(16,58,42), 11, function()
+	local _, f = mkWin("MickeyChatGui", 320, 220, "MICKEY CHAT", Color3.fromRGB(185,255,215)); if not f then return end
+	local sc = rad(new("ScrollingFrame", {Size=UDim2.new(1,-16,1,-75), Position=UDim2.new(0,8,0,32), BackgroundColor3=Color3.fromRGB(6,22,15), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,0), ScrollBarThickness=3}, f), 6)
+	local lay = new("UIListLayout", {SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4)}, sc)
+	local ib = rad(new("TextBox", {Size=UDim2.new(1,-16,0,30), Position=UDim2.new(0,8,1,-36), BackgroundColor3=Color3.fromRGB(16,54,38), Text="", PlaceholderText="Nhập chat...", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.Gotham, TextSize=11}, f), 6)
+	ib.FocusLost:Connect(function(ep)
+		if ep and ib.Text ~= "" then
+			new("TextLabel", {Size=UDim2.new(1,-10,0,20), BackgroundTransparency=1, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left, Text="["..LP.Name.."]: "..ib.Text}, sc)
+			ib.Text = ""; sc.CanvasSize = UDim2.new(0,0,0,lay.AbsoluteContentSize.Y+10); sc.CanvasPosition = Vector2.new(0, sc.CanvasSize.Y.Offset)
+		end
+	end)
+end)
+
+mkBtn(CSupport, 0, 76, 1, 30, "🧮 Máy Tính", Color3.fromRGB(16,58,42), 11, function()
+	local _, f = mkWin("CalculatorGui", 236, 355, "MÁY TÍNH", Color3.fromRGB(185,255,215)); if not f then return end
+	f.BackgroundColor3, f.Position = Color3.fromRGB(16,16,18), UDim2.new(0.5,-118,0.5,-177); rad(f, 16)
+	local exprLbl = new("TextLabel", {Size=UDim2.new(1,-20,0,22), Position=UDim2.new(0,10,0,32), BackgroundTransparency=1, Text="", TextColor3=Color3.fromRGB(150,150,160), Font=Enum.Font.Gotham, TextSize=12, TextXAlignment=Enum.TextXAlignment.Right, TextTruncate=Enum.TextTruncate.AtEnd}, f)
+	local dispLbl = new("TextLabel", {Size=UDim2.new(1,-20,0,42), Position=UDim2.new(0,10,0,54), BackgroundTransparency=1, Text="0", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=24, TextXAlignment=Enum.TextXAlignment.Right, TextTruncate=Enum.TextTruncate.AtEnd}, f)
+	local pad = new("Frame", {Size=UDim2.new(1,-16,1,-106), Position=UDim2.new(0,8,0,100), BackgroundTransparency=1}, f)
+	local expr, done = "", false
+	local function isOp(c) return c=="+" or c=="-" or c=="x" or c==":" end
+	local function curPart() for i = #expr, 1, -1 do if isOp(expr:sub(i,i)) then return expr:sub(i+1) end end; return expr end
+	local function evalExpr(raw)
+		if raw == "" then return "0" end
+		local le = raw:gsub(",","."):gsub("x","*"):gsub(":","/")
+		if le:match("[^%d%+%-%*/%.%(%)%s]") then return "Lỗi" end
+		local fn, err = loadstring("return ("..le..")"); if not fn or err then return "Lỗi" end
+		local ok, res = pcall(fn); if not ok or type(res)~="number" or res~=res or math.abs(res)==math.huge then return "Lỗi" end
+		local r = math.floor(res*1e9+0.5)/1e9
+		return math.abs(r - math.floor(r)) < 1e-9 and tostring(math.floor(r)) or tostring(r):gsub("%.",",")
+	end
+	local function refDisp() dispLbl.Text, exprLbl.Text = expr == "" and "0" or expr, "" end
+	local function press(k)
+		if k == "AC" then expr, done, dispLbl.Text, exprLbl.Text = "", false, "0", ""; return end
+		if k == "DEL" then if done then expr, done, dispLbl.Text, exprLbl.Text = "", false, "0", "" else expr = expr:sub(1,-2); refDisp() end; return end
+		if k == "=" then
+			if expr == "" then return end; local cl = expr; while #cl > 0 and isOp(cl:sub(-1,-1)) do cl = cl:sub(1,-2) end
+			if cl == "" then expr, dispLbl.Text, exprLbl.Text = "", "0", ""; return end
+			exprLbl.Text = cl; local rt = evalExpr(cl); dispLbl.Text = rt; expr, done = rt == "Lỗi" and "" or rt, rt ~= "Lỗi"; return
+		end
+		if isOp(k) then
+			done = false; if expr == "" then if k == "-" then expr = "-" end; refDisp(); return end
+			local lc = expr:sub(-1,-1); expr = isOp(lc) and (expr:sub(1,-2)..k) or (lc=="," and expr.."0"..k or expr..k); refDisp(); return
+		end
+		if k == "," then
+			if done then expr, done = "0,", false; refDisp(); return end; local pt = curPart()
+			if pt == "" or isOp(expr:sub(-1,-1)) then expr ..= "0," elseif not pt:find(",",1,true) then expr ..= "," end; refDisp(); return
+		end
+		if done then expr, done = k=="00" and "0" or k, false; refDisp(); return end
+		local pt = curPart(); if pt == "0" then if k ~= "00" and k ~= "0" then expr = expr:sub(1,-2)..k; refDisp() end; return end
+		if pt == "" and k == "00" then expr ..= "0"; refDisp(); return end; expr ..= k; refDisp()
+	end
+	local rows = {
+		{{t="AC",k="AC",bg=Color3.fromRGB(52,52,58),fg=Color3.fromRGB(255,255,255)},{t="⌫",k="DEL",bg=Color3.fromRGB(40,40,46),fg=Color3.fromRGB(255,190,110)},{t=":",k=":",bg=Color3.fromRGB(40,40,46),fg=Color3.fromRGB(255,159,67)},{t="x",k="x",bg=Color3.fromRGB(40,40,46),fg=Color3.fromRGB(255,159,67)}},
+		{{t="7",k="7",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="8",k="8",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="9",k="9",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="-",k="-",bg=Color3.fromRGB(40,40,46),fg=Color3.fromRGB(255,159,67)}},
+		{{t="4",k="4",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="5",k="5",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="6",k="6",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="+",k="+",bg=Color3.fromRGB(40,40,46),fg=Color3.fromRGB(255,159,67)}},
+		{{t="1",k="1",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="2",k="2",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="3",k="3",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="=",k="=",bg=Color3.fromRGB(255,149,0),fg=Color3.fromRGB(255,255,255)}},
+		{{t="00",k="00",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t="0",k="0",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)},{t=",",k=",",bg=Color3.fromRGB(32,32,36),fg=Color3.fromRGB(255,255,255)}},
+	}
+	local gap, btnW, btnH = 6, (220 - 18)/4, (245 - 24)/5
+	for r, row in ipairs(rows) do for c, cfg in ipairs(row) do
+		local b = rad(new("TextButton", {Size=UDim2.new(0, cfg.k=="," and btnW*2+gap or btnW, 0, btnH), Position=UDim2.new(0,(c-1)*(btnW+gap),0,(r-1)*(btnH+gap)), BackgroundColor3=cfg.bg, Text=cfg.t, TextColor3=cfg.fg, Font=Enum.Font.GothamBold, TextSize=15, BorderSizePixel=0}, pad), 999)
+		b.MouseButton1Click:Connect(function() press(cfg.k) end)
+	end end
+end)
+
+mkBtn(CSupport, 0, 112, 1, 30, "🌐 Language Translation", Color3.fromRGB(16,58,42), 11, function()
+	local _, f = mkWin("TranslationGui", 310, 210, "Dịch Tiếng Việt", Color3.fromRGB(185,255,215)); if not f then return end
+	local ib = rad(new("TextBox", {Size=UDim2.new(1,-16,0,50), Position=UDim2.new(0,8,0,32), BackgroundColor3=Color3.fromRGB(16,54,38), Text="", PlaceholderText="Nhập tiếng Anh...", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.Gotham, TextSize=11, TextWrapped=true}, f), 6)
+	local rs = rad(new("ScrollingFrame", {Size=UDim2.new(1,-16,0,80), Position=UDim2.new(0,8,0,120), BackgroundColor3=Color3.fromRGB(6,22,15), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,100), ScrollBarThickness=3}, f), 6)
+	local rl = new("TextLabel", {Size=UDim2.new(1,-10,1,0), Position=UDim2.new(0,5,0,0), BackgroundTransparency=1, Text="Kết quả...", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, TextWrapped=true}, rs)
+	local dBtn = rad(new("TextButton", {Size=UDim2.new(1,-16,0,26), Position=UDim2.new(0,8,0,88), BackgroundColor3=Color3.fromRGB(36,145,88), Text="Dịch", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=11}, f), 6)
+	dBtn.MouseButton1Click:Connect(function()
+		if ib.Text == "" then return end; rl.Text = "Đang dịch..."
+		task.spawn(function()
+			local sc, res = pcall(function() return HS:JSONDecode(game:HttpGet("https://api.mymemory.translated.net/get?q="..HS:UrlEncode(ib.Text).."&langpair=en|vi")).responseData.translatedText end)
+			rl.Text = sc and res or "Lỗi API."
+		end)
+	end)
+end)
+
+mkBtn(CSupport, 0, 148, 1, 30, "👤 Player Info", Color3.fromRGB(16,58,42), 11, function()
+	local _, f = mkWin("PlayerInfoGui", 360, 310, "Tra Cứu Player Chi Tiết", Color3.fromRGB(185,255,215)); if not f then return end
+	local ib = rad(new("TextBox", {Size=UDim2.new(1,-16,0,28), Position=UDim2.new(0,8,0,32), BackgroundColor3=Color3.fromRGB(16,54,38), Text="", PlaceholderText="Nhập tên bất kỳ trên Roblox...", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.Gotham, TextSize=11}, f), 6)
+	local sBtn = rad(new("TextButton", {Size=UDim2.new(0.48,-4,0,26), Position=UDim2.new(0,8,0,65), BackgroundColor3=Color3.fromRGB(24,82,58), Text="🔍 Tìm Kiếm", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=11}, f), 6)
+	local rBtn = rad(new("TextButton", {Size=UDim2.new(0.48,-4,0,26), Position=UDim2.new(0.52,4,0,65), BackgroundColor3=Color3.fromRGB(36,145,88), Text="🔄 Cập Nhật", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=11}, f), 6)
+	local av = rad(new("ImageLabel", {Size=UDim2.new(0,75,0,75), Position=UDim2.new(0,8,0,96), BackgroundColor3=Color3.fromRGB(6,22,15), Image="rbxassetid://6023426915"}, f), 6)
+	local infoSc = rad(new("ScrollingFrame", {Size=UDim2.new(1,-95,0,75), Position=UDim2.new(0,88,0,96), BackgroundColor3=Color3.fromRGB(6,22,15), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,100), ScrollBarThickness=3}, f), 6)
+	local lb = new("TextLabel", {Size=UDim2.new(1,-10,1,0), Position=UDim2.new(0,5,0,0), BackgroundTransparency=1, Text="Nhập tên bất kỳ và bấm Tìm Kiếm.", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, TextWrapped=true}, infoSc)
+	local detailSc = rad(new("ScrollingFrame", {Size=UDim2.new(1,-16,0,120), Position=UDim2.new(0,8,0,178), BackgroundColor3=Color3.fromRGB(6,22,15), BorderSizePixel=0, CanvasSize=UDim2.new(0,0,0,0), ScrollBarThickness=4}, f), 6)
+	local detailLay = new("UIListLayout", {SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4)}, detailSc)
+	local function search()
+		local q = ib.Text:lower(); if q == "" then lb.Text = "Vui lòng nhập tên!" return end
+		lb.Text = "⏳ Đang tra cứu chi tiết..."
+		for _, ch in ipairs(detailSc:GetChildren()) do if ch:IsA("TextLabel") then ch:Destroy() end end
+		task.spawn(function()
+			local uid, found = nil, nil
+			for _, p in ipairs(Plrs:GetPlayers()) do if p.Name:lower():sub(1,#q)==q or p.DisplayName:lower():sub(1,#q)==q then found, uid = p, p.UserId; break end end
+			if not uid then local ok, id = pcall(function() return Plrs:GetUserIdFromNameAsync(ib.Text) end); if ok then uid = id end end
+			if not uid then lb.Text = "❌ Không tìm thấy người chơi này!"; av.Image = "rbxassetid://6023426915"; return end
+			local okT, url = pcall(function() return Plrs:GetUserThumbnailAsync(uid, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420) end); if okT and url then av.Image = url end
+			local uname, dname, cdate = found and found.Name or ib.Text, found and found.Name or ib.Text, "Không rõ"
+			local okA, resA = pcall(function() return game:HttpGet("https://users.roblox.com/v1/users/"..uid) end)
+			if okA and resA then
+				local d = HS:JSONDecode(resA)
+				if d then uname, dname = d.name or uname, d.displayName or dname
+					local y, m, day = (d.created or ""):match("(%d+)-(%d+)-(%d+)"); if y then cdate = day.."/"..m.."/"..y end
+				end
+			end
+			local tot, hasLim, okD, desc = 0, false, pcall(function() return Plrs:GetHumanoidDescriptionFromUserId(uid) end)
+			if okD and desc then
+				local seen, ids = {}, {}; local function push(id) if type(id)=="number" and id>0 and not seen[id] then seen[id]=true; table.insert(ids, id) end end
+				for _, prop in ipairs({"GraphicTShirt","Shirt","Pants","Face","Head","Torso","LeftArm","RightArm","LeftLeg","RightLeg"}) do push(desc[prop]) end
+				pcall(function() for _, a in ipairs(desc:GetAccessories(false)) do push(a.AssetId or a.assetId) end end)
+				pcall(function() for _, a in ipairs(desc:GetAccessories(true)) do push(a.AssetId or a.assetId) end end)
+				for _, id in ipairs(ids) do
+					local okI, inf = pcall(function() return MS:GetProductInfo(id) end)
+					if okI and inf then
+						local lim = (inf.IsLimited==true) or (inf.IsLimitedUnique==true); if lim then hasLim = true end
+						local pr, pt = inf.PriceInRobux, "0 R$ (Miễn phí)"
+						if type(pr)=="number" and pr>0 and pr<1e9 then tot += pr; pt = pr.." R$" elseif lim then pt = "[Limited]" end
+						new("TextLabel", {Size=UDim2.new(1,-10,0,36), BackgroundTransparency=1, TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.Gotham, TextSize=10, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, TextWrapped=true, Text="🔸 "..(inf.Name or "Món đồ (#"..id..")").."\n   Tác giả: "..((inf.Creator and inf.Creator.Name) or "Roblox").." | Giá: "..pt}, detailSc)
+					end
+				end
+			end
+			detailSc.CanvasSize = UDim2.new(0,0,0,detailLay.AbsoluteContentSize.Y+10)
+			lb.Text = "👤 "..dname.."\n   @"..uname.."\n🆔 ID: "..uid.."\n📅 Tạo: "..cdate.."\n💎 Tổng: "..tot.." R$"..(hasLim and " (có đồ Limited)" or "")
+		end)
+	end
+	sBtn.MouseButton1Click:Connect(search); rBtn.MouseButton1Click:Connect(search)
+end)
+
+local crosshairGui = nil
+local function destroyCrosshair() if crosshairGui then pcall(function() crosshairGui:Destroy() end); crosshairGui = nil end; destroyGui("CrosshairGui") end
+local function createCrosshair()
+	destroyCrosshair()
+	crosshairGui = new("ScreenGui", {Name="CrosshairGui", ResetOnSpawn=false, IgnoreGuiInset=true, DisplayOrder=999999, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	buildCrosshair(crosshairGui, true)
+end
+addTgl(CSupport, "Hỗ trợ tầm ngắm", 184, function(st) if st then createCrosshair() else destroyCrosshair() end end)
+
+-- 4. INFO
+local antiAfkConn, antiAfkLoop = nil, nil
+addTgl(CInfo, "Anti AFK", 5, function(st)
+	if antiAfkConn then antiAfkConn:Disconnect(); antiAfkConn = nil end
+	if antiAfkLoop then task.cancel(antiAfkLoop); antiAfkLoop = nil end
+	if st then
+		local function kick() pcall(function() VU:CaptureController(); VU:ClickButton2(Vector2.zero, Wsp.CurrentCamera and Wsp.CurrentCamera.CFrame or CFrame.new()) end) end
+		antiAfkConn = LP.Idled:Connect(kick)
+		antiAfkLoop = task.spawn(function() while antiAfkConn do task.wait(120); if antiAfkConn then kick() end end end)
+	end
+end)
+local savedPlaceId, savedJobId = game.PlaceId, game.JobId
+local RejoinBtn; RejoinBtn = mkBtn(CInfo, 0, 40, 1, 28, "🔁 Rejoin Server", Color3.fromRGB(16,58,42), 11, function()
+	RejoinBtn.Text = "🔁 Đang dịch chuyển..."
+	if not pcall(function() if savedJobId ~= "" then TS:TeleportToPlaceInstance(savedPlaceId, savedJobId, LP) else TS:Teleport(savedPlaceId, LP) end end) then pcall(function() TS:Teleport(savedPlaceId, LP) end) end
+end)
+mkBtn(CInfo, 0, 74, 1, 28, "🌍 Server Hop", Color3.fromRGB(16,58,42), 11, function() TS:Teleport(game.PlaceId, LP) end)
+
+local introCard = rad(new("Frame", {Size=UDim2.new(1,0,0,116), Position=UDim2.new(0,0,0,112), BackgroundColor3=Color3.fromRGB(12,44,31), BorderSizePixel=0}, CInfo), 8)
+stk(introCard, Color3.fromRGB(60,235,140), 1.2, 0.4)
+local usbBadge = rad(new("Frame", {Size=UDim2.new(0,56,0,26), Position=UDim2.new(0,10,0,10), BackgroundColor3=Color3.fromRGB(16,58,42)}, introCard), 6)
+stk(usbBadge, Color3.fromRGB(60,235,140), 1.4)
+new("TextLabel", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, Text="USB", TextColor3=Color3.fromRGB(95,245,160), Font=Enum.Font.GothamBlack, TextSize=13}, usbBadge)
+new("TextLabel", {Size=UDim2.new(1,-20,0,66), Position=UDim2.new(0,10,0,42), BackgroundTransparency=1, Text="This is a hub I created, please bear with me if it has a slight bug.", TextColor3=Color3.fromRGB(220,255,235), Font=Enum.Font.GothamBold, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left, TextYAlignment=Enum.TextYAlignment.Top, TextWrapped=true}, introCard)
+
+-- MINI GAME HUB (4 GAMES + MỖI GAME CÓ NÚT ẨN/HIỆN GIỚI THIỆU RIÊNG)
+for _, ch in ipairs(CMiniGame:GetChildren()) do
+	if ch:IsA("GuiObject") then ch:Destroy() end
+end
+
+local mgCards = {}
+
+local function relayoutMiniGames()
+	local y = 8
+	for _, item in ipairs(mgCards) do
+		if item.card and item.card.Parent then
+			local shown = item.introShown
+			if item.desc then item.desc.Visible = shown end
+			if item.introBtn then
+				item.introBtn.Text = shown and "📝 Ẩn GT" or "📝 Hiện GT"
+			end
+			local h = shown and item.fullH or item.miniH
+			item.card.Position = UDim2.new(0, 0, 0, y)
+			item.card.Size = UDim2.new(1, 0, 0, h)
+			if item.row1 then item.row1.Position = UDim2.new(0, 0, 0, h - 54) end
+			if item.row2 then item.row2.Position = UDim2.new(0, 0, 0, h - 26) end
+			y += h + 8
+		end
+	end
+	if CMiniGame:IsA("ScrollingFrame") then
+		CMiniGame.CanvasSize = UDim2.new(0, 0, 0, math.max(240, y + 14))
+	end
+end
+
+local function makeGameCard(titleTxt, accentCol, introTxt, fullH, miniH, onOpen, onToggleVis, onOff)
+	local card = rad(new("Frame", {
+		Size = UDim2.new(1, 0, 0, fullH),
+		Position = UDim2.new(0, 0, 0, 0),
+		BackgroundColor3 = Color3.fromRGB(12, 44, 31),
+		BorderSizePixel = 0,
+	}, CMiniGame), 8)
+	stk(card, accentCol, 1.3, 0.45)
+
+	new("TextLabel", {
+		Size = UDim2.new(0.68, -8, 0, 20),
+		Position = UDim2.new(0, 8, 0, 6),
+		BackgroundTransparency = 1,
+		Text = titleTxt,
+		TextColor3 = Color3.fromRGB(95, 245, 160),
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextScaled = true,
+	}, card)
+
+	local introBtn = rad(new("TextButton", {
+		Size = UDim2.new(0.30, -4, 0, 20),
+		Position = UDim2.new(0.70, 0, 0, 6),
+		BackgroundColor3 = Color3.fromRGB(22, 78, 54),
+		Text = "📝 Ẩn GT",
+		TextColor3 = Color3.fromRGB(215, 255, 232),
+		Font = Enum.Font.GothamBold,
+		TextSize = 9,
+		TextScaled = true,
+	}, card), 5)
+
+	local desc = new("TextLabel", {
+		Size = UDim2.new(1, -16, 0, 56),
+		Position = UDim2.new(0, 8, 0, 28),
+		BackgroundTransparency = 1,
+		Text = introTxt,
+		TextColor3 = Color3.fromRGB(210, 248, 225),
+		Font = Enum.Font.Gotham,
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+	}, card)
+
+	local row1 = new("Frame", {Size=UDim2.new(1,0,0,24), Position=UDim2.new(0,0,0,fullH-54), BackgroundTransparency=1}, card)
+	local bOpen = rad(new("TextButton", {Size=UDim2.new(0.5,-6,1,0), Position=UDim2.new(0,4,0,0), BackgroundColor3=Color3.fromRGB(36,145,88), Text="▶️ Mở / Reset", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10}, row1), 6)
+	local bVis  = rad(new("TextButton", {Size=UDim2.new(0.5,-6,1,0), Position=UDim2.new(0.5,2,0,0), BackgroundColor3=Color3.fromRGB(24,82,58), Text="👁️ Ẩn / Hiện", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10}, row1), 6)
+
+	local row2 = new("Frame", {Size=UDim2.new(1,0,0,22), Position=UDim2.new(0,0,0,fullH-26), BackgroundTransparency=1}, card)
+	local bOff  = rad(new("TextButton", {Size=UDim2.new(1,-8,1,0), Position=UDim2.new(0,4,0,0), BackgroundColor3=Color3.fromRGB(120,28,28), Text="❌ Tắt Game", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10}, row2), 6)
+
+	bOpen.MouseButton1Click:Connect(onOpen)
+	bVis.MouseButton1Click:Connect(onToggleVis)
+	bOff.MouseButton1Click:Connect(onOff)
+
+	local entry = {
+		card = card,
+		desc = desc,
+		introBtn = introBtn,
+		row1 = row1,
+		row2 = row2,
+		fullH = fullH,
+		miniH = miniH,
+		introShown = true,
+	}
+	introBtn.MouseButton1Click:Connect(function()
+		entry.introShown = not entry.introShown
+		relayoutMiniGames()
+	end)
+	table.insert(mgCards, entry)
+	return entry
+end
+
+-- 1) BLOCK BLAST
+local bbGui, bbConns, bbBest, bbScore, bbCombo = nil, {}, 0, 0, 0
+local bbGrid, bbTray = {}, {nil, nil, nil}
+local bbCfg = {size=190, vis=true, x2=false, lucky=true, lock=true}
+local bbWin, bbSetVis = nil, nil
+local BB_PTS = {50,60,70,80,90,100,130,140,160,180}
+local BB_COL = {Color3.fromRGB(255,195,45),Color3.fromRGB(55,195,255),Color3.fromRGB(165,85,255),Color3.fromRGB(255,75,85),Color3.fromRGB(255,130,45),Color3.fromRGB(70,225,125)}
+local BB_SHP = {{{1}},{{1,1}},{{1},{1}},{{1,1,1}},{{1},{1},{1}},{{1,1,1,1}},{{1},{1},{1},{1}},{{1,1},{1,1}},{{1,1,1},{1,1,1},{1,1,1}},{{1,0},{1,0},{1,1}},{{0,1},{0,1},{1,1}},{{1,1,1},{1,0,0}},{{1,1,1},{0,0,1}},{{1,1,0},{0,1,1}},{{0,1,1},{1,1,0}},{{1,0},{1,1},{0,1}},{{0,1},{1,1},{1,0}},{{1,1,1},{0,1,0}},{{0,1,0},{1,1,1}},{{1,0},{1,1},{1,0}},{{0,1},{1,1},{0,1}}}
+
+local function destroyBlockBlast()
+	for _, c in ipairs(bbConns) do c:Disconnect() end; table.clear(bbConns)
+	if bbGui then pcall(function() bbGui:Destroy() end); bbGui = nil end
+	destroyGui("USBBlockBlastGui"); bbWin, bbSetVis = nil, nil
+end
+
+local function createBlockBlastGui()
+	destroyBlockBlast(); bbCfg.vis = true
+	bbGui = new("ScreenGui", {Name="USBBlockBlastGui",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999997,ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local win = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,bbCfg.size,0,math.floor(bbCfg.size*1.32)),Position=UDim2.new(0.5,0,0.5,0),BackgroundColor3=Color3.fromRGB(36,62,118),BorderSizePixel=0,Active=true,Draggable=not bbCfg.lock}, bbGui), 10)
+	stk(win, Color3.fromRGB(115,195,255), 1.8); bbWin = win
+
+	local bestLbl = new("TextLabel", {Size=UDim2.new(0.55,0,0,16),Position=UDim2.new(0,6,0,4),BackgroundTransparency=1,Text="👑 0",TextColor3=Color3.fromRGB(255,215,70),Font=Enum.Font.GothamBlack,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,TextScaled=true}, win)
+	local closeBtn = rad(new("TextButton", {Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-22,0,4),BackgroundColor3=Color3.fromRGB(175,42,52),Text="X",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBold,TextSize=10,ZIndex=12}, win), 4)
+	local hideBtn = rad(new("TextButton", {Size=UDim2.new(0,26,0,18),Position=UDim2.new(1,-50,0,4),BackgroundColor3=Color3.fromRGB(48,86,158),Text="Ẩn",TextColor3=Color3.fromRGB(225,245,255),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=12}, win), 4)
+	local scoreLbl = new("TextLabel", {Size=UDim2.new(1,-12,0,20),Position=UDim2.new(0,6,0,20),BackgroundTransparency=1,Text="0",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=18,TextScaled=true}, win)
+	local statLbl = new("TextLabel", {Size=UDim2.new(1,-12,0,12),Position=UDim2.new(0,6,0,41),BackgroundTransparency=1,Text="Kéo tới bóng mờ rồi thả",TextColor3=Color3.fromRGB(180,235,255),Font=Enum.Font.GothamBold,TextSize=9,TextScaled=true}, win)
+
+	local bHold = new("Frame", {Size=UDim2.new(1,-12,0.56,0),Position=UDim2.new(0,6,0,55),BackgroundTransparency=1}, win)
+	local board = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(1,0,1,0),Position=UDim2.new(0.5,0,0.5,0),BackgroundColor3=Color3.fromRGB(20,34,68),BorderSizePixel=0}, bHold), 6)
+	stk(board, Color3.fromRGB(75,130,215), 1.3); new("UIAspectRatioConstraint", {AspectRatio=1,DominantAxis=Enum.DominantAxis.Width}, board)
+
+	local tray = rad(new("Frame", {Size=UDim2.new(1,-12,0,48),Position=UDim2.new(0,6,1,-54),BackgroundColor3=Color3.fromRGB(24,42,82),BorderSizePixel=0}, win), 6)
+	local slots = {}
+	for i=1,3 do slots[i] = new("Frame", {Size=UDim2.new(1/3,-4,1,-6),Position=UDim2.new((i-1)/3,2,0,3),BackgroundTransparency=1,Active=true}, tray) end
+
+	local bar = rad(new("Frame", {AnchorPoint=Vector2.new(0,0),Size=UDim2.new(0,96,0,152),Position=UDim2.new(0.5,bbCfg.size*0.5+6,0.5,0),BackgroundColor3=Color3.fromRGB(9,34,24),BorderSizePixel=0,Active=true,ZIndex=15}, bbGui), 8)
+	stk(bar, Color3.fromRGB(60,235,140), 1.4)
+	local function mkSideBtn(y,txt,col) return rad(new("TextButton", {Size=UDim2.new(1,-10,0,22),Position=UDim2.new(0,5,0,y),BackgroundColor3=col,Text=txt,TextColor3=Color3.fromRGB(220,255,235),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=16}, bar), 5) end
+	local x2Btn = mkSideBtn(6,"",Color3.fromRGB(16,54,38))
+	local lkBtn = mkSideBtn(32,"",Color3.fromRGB(16,54,38))
+	local loBtn = mkSideBtn(58,"",Color3.fromRGB(145,45,45))
+	local viBtn = mkSideBtn(84,"",Color3.fromRGB(28,96,66))
+	local szLbl = new("TextLabel", {Size=UDim2.new(1,-8,0,14),Position=UDim2.new(0,4,0,110),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(195,255,220),Font=Enum.Font.GothamBold,TextSize=8,TextScaled=true,ZIndex=16}, bar)
+	local track = rad(new("Frame", {Size=UDim2.new(1,-14,0,7),Position=UDim2.new(0,7,0,130),BackgroundColor3=Color3.fromRGB(20,76,52),BorderSizePixel=0,Active=true,ZIndex=16}, bar), 999)
+	local fill = rad(new("Frame", {Size=UDim2.new(0,0,1,0),BackgroundColor3=Color3.fromRGB(60,235,140),BorderSizePixel=0,ZIndex=17}, track), 999)
+	local thumb = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,12,0,12),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=Color3.fromRGB(235,255,245),BorderSizePixel=0,ZIndex=18}, track), 999)
+
+	local cells, shds, ghost = {}, {}, new("Frame", {BackgroundTransparency=1,Visible=false,ZIndex=30}, bbGui)
+	local over = rad(new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(10,16,32),BackgroundTransparency=0.22,Visible=false,ZIndex=25}, win), 10)
+	new("TextLabel", {Size=UDim2.new(1,-12,0,24),Position=UDim2.new(0,6,0,58),BackgroundTransparency=1,Text="💀 HẾT NƯỚC ĐI!",TextColor3=Color3.fromRGB(255,95,105),Font=Enum.Font.GothamBlack,TextSize=14,TextScaled=true}, over)
+	local endLbl = new("TextLabel", {Size=UDim2.new(1,-12,0,32),Position=UDim2.new(0,6,0,86),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(240,250,255),Font=Enum.Font.GothamBold,TextSize=11,TextScaled=true}, over)
+	local retryBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.58,0,0,26),Position=UDim2.new(0.5,0,0,126),BackgroundColor3=Color3.fromRGB(45,175,95),Text="🔄 Chơi lại",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=11,ZIndex=26}, over), 6)
+
+	local drag, snap, cPx, step, pad = nil, nil, 18, 20, 3
+
+	local function syncSideBarPos()
+		local wPos, wSz = win.AbsolutePosition, win.AbsoluteSize
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+		local sideX = wPos.X + wSz.X + 6
+		if sideX + bar.AbsoluteSize.X > vp.X - 6 then sideX = math.max(6, wPos.X - bar.AbsoluteSize.X - 6) end
+		bar.Position = UDim2.new(0, sideX, 0, math.clamp(wPos.Y + 24, 6, vp.Y - bar.AbsoluteSize.Y - 6))
+	end
+
+	local function buildGrid()
+		for _, ch in ipairs(board:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end
+		local px = math.max(36, board.AbsoluteSize.X)
+		pad, gap = math.max(2, math.floor(px*0.016)), math.max(1, math.floor(px*0.01))
+		cPx = math.max(3, math.floor((px - pad*2 - gap*7)/8)); step = cPx + gap
+		for r=1,8 do cells[r], shds[r] = {}, {}
+			for c=1,8 do
+				local x, y, radPx = pad+(c-1)*step, pad+(r-1)*step, math.max(1, math.floor(cPx*0.15))
+				cells[r][c] = rad(new("Frame", {Size=UDim2.new(0,cPx,0,cPx),Position=UDim2.new(0,x,0,y),BackgroundColor3=bbGrid[r] and bbGrid[r][c] or Color3.fromRGB(30,48,92),BorderSizePixel=0,ZIndex=2}, board), radPx)
+				shds[r][c] = rad(new("Frame", {Size=UDim2.new(0,cPx,0,cPx),Position=UDim2.new(0,x,0,y),BackgroundColor3=Color3.fromRGB(255,255,255),BackgroundTransparency=0.5,BorderSizePixel=0,Visible=false,ZIndex=4}, board), radPx)
+				stk(shds[r][c], Color3.fromRGB(255,255,255), 1.2, 0.2)
+			end
+		end
+	end
+
+	local function clearSnap() snap = nil; for r=1,8 do for c=1,8 do if shds[r] and shds[r][c] then shds[r][c].Visible = false end end end end
+	local function stopDrag() drag, ghost.Visible = nil, false; clearSnap() end
+	local function topLeft(pos, shp)
+		local r, c = #shp, #shp[1]
+		local tw, th = c*cPx+(c-1)*(step-cPx), r*cPx+(r-1)*(step-cPx)
+		return pos.X-tw*0.5, pos.Y-th*0.5-22, tw, th
+	end
+	local function canPut(shp, sr, sc)
+		if not shp or not sr or not sc then return false end
+		local r, c = #shp, #shp[1]
+		if sr<1 or sc<1 or sr+r-1>8 or sc+c-1>8 then return false end
+		for i=1,r do for j=1,c do if shp[i][j]==1 and bbGrid[sr+i-1][sc+j-1] then return false end end end
+		return true
+	end
+	local function updSnap(pos, it)
+		clearSnap(); if not pos or not it then return end
+		local tlX, tlY = topLeft(pos, it.shp); local bp = board.AbsolutePosition
+		local c, r = math.floor((tlX-(bp.X+pad))/step+0.5)+1, math.floor((tlY-(bp.Y+pad))/step+0.5)+1
+		if not canPut(it.shp, r, c) then return end
+		snap = {r=r, c=c}
+		for i=1,#it.shp do for j=1,#it.shp[1] do if it.shp[i][j]==1 and shds[r+i-1] and shds[r+i-1][c+j-1] then
+			shds[r+i-1][c+j-1].BackgroundColor3, shds[r+i-1][c+j-1].Visible = it.col, true
+		end end end
+	end
+	local function syncHud() if bbScore>bbBest then bbBest=bbScore end; scoreLbl.Text, bestLbl.Text = tostring(bbScore), "👑 "..bbBest end
+	local function drawBoard() for r=1,8 do for c=1,8 do if cells[r] and cells[r][c] then cells[r][c].BackgroundColor3 = bbGrid[r][c] or Color3.fromRGB(30,48,92) end end end end
+	local function hasMove()
+		for i=1,3 do local it=bbTray[i]; if it then for r=1,8 do for c=1,8 do if canPut(it.shp,r,c) then return true end end end end end
+		return false
+	end
+	local function gameOver() stopDrag(); syncHud(); endLbl.Text="Điểm: "..bbScore.."\nBest: "..bbBest; over.Visible=true end
+	local function clearLines()
+		local fr, fc = {}, {}
+		for r=1,8 do local ok=true; for c=1,8 do if not bbGrid[r][c] then ok=false; break end end; if ok then table.insert(fr,r) end end
+		for c=1,8 do local ok=true; for r=1,8 do if not bbGrid[r][c] then ok=false; break end end; if ok then table.insert(fc,c) end end
+		for _,r in ipairs(fr) do for c=1,8 do bbGrid[r][c]=nil end end
+		for _,c in ipairs(fc) do for r=1,8 do bbGrid[r][c]=nil end end
+		return #fr + #fc
+	end
+	local function randBlock()
+		local col = BB_COL[math.random(#BB_COL)]
+		if bbCfg.lucky then
+			local pool = {}
+			for _, sh in ipairs(BB_SHP) do
+				local ok=false; for r=1,8 do for c=1,8 do if canPut(sh,r,c) then ok=true; break end end; if ok then break end end
+				if ok then
+					local n=0; for _,row in ipairs(sh) do for _,v in ipairs(row) do if v==1 then n+=1 end end end
+					for _=1,(n<=4 and 4 or 1) do table.insert(pool, sh) end
+				end
+			end
+			if #pool>0 then return {shp=pool[math.random(#pool)], col=col} end
+		end
+		return {shp=BB_SHP[math.random(#BB_SHP)], col=col}
+	end
+	local function drawTray()
+		for i=1,3 do local sl, it = slots[i], bbTray[i]
+			for _,ch in ipairs(sl:GetChildren()) do ch:Destroy() end
+			if it and not (drag and drag.idx==i) then
+				local r, c = #it.shp, #it.shp[1]
+				local mp = math.min(11, math.max(4, math.floor(38/math.max(r,c))))
+				local ox, oy = math.floor((sl.AbsoluteSize.X-(c*(mp+2)-2))*0.5), math.floor((sl.AbsoluteSize.Y-(r*(mp+2)-2))*0.5)
+				for i2=1,r do for j2=1,c do if it.shp[i2][j2]==1 then
+					rad(new("Frame",{Size=UDim2.new(0,mp,0,mp),Position=UDim2.new(0,ox+(j2-1)*(mp+2),0,oy+(i2-1)*(mp+2)),BackgroundColor3=it.col,BorderSizePixel=0},sl),2)
+				end end end
+			end
+		end
+	end
+	local function refill() for i=1,3 do if bbTray[i] then drawTray(); return end end; for i=1,3 do bbTray[i]=randBlock() end; drawTray() end
+	local function reset()
+		over.Visible, bbScore, bbCombo = false, 0, 0; stopDrag()
+		for r=1,8 do bbGrid[r]={} end; for i=1,3 do bbTray[i]=randBlock() end
+		statLbl.Text="Kéo tới bóng mờ rồi thả"; syncHud(); drawBoard(); drawTray()
+		if not hasMove() then gameOver() end
+	end
+	local function showGhost(it, pos)
+		for _,ch in ipairs(ghost:GetChildren()) do ch:Destroy() end
+		local tlX, tlY, tw, th = topLeft(pos, it.shp)
+		ghost.Size, ghost.Position, ghost.Visible = UDim2.new(0,tw,0,th), UDim2.new(0,tlX,0,tlY), true
+		for i=1,#it.shp do for j=1,#it.shp[1] do if it.shp[i][j]==1 then
+			rad(new("Frame",{Size=UDim2.new(0,cPx,0,cPx),Position=UDim2.new(0,(j-1)*step,0,(i-1)*step),BackgroundColor3=it.col,BackgroundTransparency=0.08,BorderSizePixel=0},ghost),math.max(1,math.floor(cPx*0.15)))
+		end end end
+		updSnap(pos, it)
+	end
+	local function dropAt(pos)
+		if not drag then return end
+		local d = drag; local p = (pos and (pos.X~=0 or pos.Y~=0)) and pos or d.pos
+		updSnap(p, d.it); local t = snap; stopDrag()
+		if t and canPut(d.it.shp, t.r, t.c) then
+			for i=1,#d.it.shp do for j=1,#d.it.shp[1] do if d.it.shp[i][j]==1 then bbGrid[t.r+i-1][t.c+j-1]=d.it.col end end end
+			bbTray[d.idx] = nil
+			local ln, m = clearLines(), bbCfg.x2 and 2 or 1
+			if ln>0 then bbCombo+=1; local e=BB_PTS[math.min(bbCombo,10)]*ln*m; bbScore+=e; statLbl.Text="🔥 Combo "..bbCombo.." +"..e
+			else bbCombo=0; local e=30*m; bbScore+=e; statLbl.Text="+"..e.." điểm" end
+			syncHud(); drawBoard(); refill(); if not hasMove() then gameOver() end
+		else drawTray(); statLbl.Text="Khối về khay" end
+	end
+
+	for i=1,3 do
+		table.insert(bbConns, slots[i].InputBegan:Connect(function(inp)
+			if drag or over.Visible or not bbCfg.vis or not bbTray[i] then return end
+			if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+				drag = {idx=i, it=bbTray[i], pos=inp.Position}; drawTray(); showGhost(drag.it, inp.Position)
+			end
+		end))
+	end
+	table.insert(bbConns, Uis.InputChanged:Connect(function(inp)
+		if drag and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+			drag.pos = inp.Position; local x, y = topLeft(inp.Position, drag.it.shp)
+			ghost.Position = UDim2.new(0,x,0,y); updSnap(inp.Position, drag.it)
+		end
+	end))
+	table.insert(bbConns, Uis.InputEnded:Connect(function(inp)
+		if drag and (inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch) then dropAt(inp.Position) end
+	end))
+	table.insert(bbConns, Uis.TouchEnded:Connect(function(t) if drag then dropAt(t and t.Position) end end))
+	table.insert(bbConns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncSideBarPos))
+	table.insert(bbConns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncSideBarPos))
+
+	local function refreshBtns()
+		x2Btn.Text="x2:"..(bbCfg.x2 and "BẬT" or "TẮT"); x2Btn.BackgroundColor3=bbCfg.x2 and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+		lkBtn.Text="🍀:"..(bbCfg.lucky and "BẬT" or "TẮT"); lkBtn.BackgroundColor3=bbCfg.lucky and Color3.fromRGB(36,145,88) or Color3.fromRGB(16,54,38)
+		loBtn.Text=bbCfg.lock and "🔒 Lock" or "🔓 Unlock"; loBtn.BackgroundColor3=bbCfg.lock and Color3.fromRGB(145,45,45) or Color3.fromRGB(36,145,88); win.Draggable=not bbCfg.lock
+		viBtn.Text=bbCfg.vis and "👁️ Ẩn" or "👁️ Hiện"; viBtn.BackgroundColor3=bbCfg.vis and Color3.fromRGB(28,96,66) or Color3.fromRGB(92,58,18)
+		local r = math.clamp((bbCfg.size-100)/200, 0, 1)
+		fill.Size, thumb.Position, szLbl.Text = UDim2.new(r,0,1,0), UDim2.new(r,0,0.5,0), "Size: "..bbCfg.size.." (100-300)"
+	end
+	local function setSize(v)
+		bbCfg.size = math.clamp(math.floor(v), 100, 300)
+		win.Size = UDim2.new(0, bbCfg.size, 0, math.floor(bbCfg.size*1.32))
+		refreshBtns(); task.defer(function() syncSideBarPos(); buildGrid(); drawTray() end)
+	end
+	local sliding = false
+	local function slideX(x) setSize(100 + math.clamp((x-track.AbsolutePosition.X)/math.max(1,track.AbsoluteSize.X),0,1)*200) end
+	table.insert(bbConns, track.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=true; slideX(inp.Position.X) end end))
+	table.insert(bbConns, Uis.InputChanged:Connect(function(inp) if sliding and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then slideX(inp.Position.X) end end))
+	table.insert(bbConns, Uis.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=false end end))
+
+	local function setVis(s) bbCfg.vis, win.Visible, bar.Visible = s, s, s; if not s then stopDrag(); drawTray() end; refreshBtns() end
+	bbSetVis = setVis
+	x2Btn.MouseButton1Click:Connect(function() bbCfg.x2=not bbCfg.x2; refreshBtns() end)
+	lkBtn.MouseButton1Click:Connect(function() bbCfg.lucky=not bbCfg.lucky; refreshBtns() end)
+    loBtn.MouseButton1Click:Connect(function() bbCfg.lock=not bbCfg.lock; refreshBtns() end)
+	viBtn.MouseButton1Click:Connect(function() setVis(not bbCfg.vis) end)
+	hideBtn.MouseButton1Click:Connect(function() setVis(false) end)
+	closeBtn.MouseButton1Click:Connect(destroyBlockBlast); retryBtn.MouseButton1Click:Connect(reset)
+	refreshBtns(); task.defer(function() syncSideBarPos(); buildGrid(); reset() end)
+end
+
+-- 2) CÁNH FLAPPY
+local fpGui, fpConns, fpLoopConn = nil, {}, nil
+local fpBest, fpScore, fpLives = 0, 0, 3
+local fpCfg = {size = 210, vis = true, hard = false, lock = true}
+local fpWin, fpSetVis = nil, nil
+
+local function destroyFlappy()
+	if fpLoopConn then fpLoopConn:Disconnect(); fpLoopConn = nil end
+	for _, c in ipairs(fpConns) do c:Disconnect() end; table.clear(fpConns)
+	if fpGui then pcall(function() fpGui:Destroy() end); fpGui = nil end
+	destroyGui("USBCanhFlappyGui"); fpWin, fpSetVis = nil, nil
+end
+
+local function createFlappyGui()
+	destroyFlappy(); fpCfg.vis = true
+	fpGui = new("ScreenGui", {Name="USBCanhFlappyGui",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999998,ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local win = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,fpCfg.size,0,math.floor(fpCfg.size*1.25)),Position=UDim2.new(0.5,-45,0.5,0),BackgroundColor3=Color3.fromRGB(115,205,245),BorderSizePixel=0,Active=true,Draggable=not fpCfg.lock,ClipsDescendants=true}, fpGui), 10)
+	stk(win, Color3.fromRGB(52,138,86), 2); fpWin = win
+
+	local topBar = new("Frame", {Size=UDim2.new(1,0,0,26),Position=UDim2.new(0,0,0,0),BackgroundColor3=Color3.fromRGB(22,68,52),BackgroundTransparency=0.18,BorderSizePixel=0,ZIndex=10}, win)
+	new("TextLabel", {Size=UDim2.new(0.42,0,1,0),Position=UDim2.new(0,6,0,0),BackgroundTransparency=1,Text="🐦 Cánh Flappy",TextColor3=Color3.fromRGB(255,250,210),Font=Enum.Font.GothamBlack,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,TextScaled=true,ZIndex=11}, topBar)
+	local hudLbl = new("TextLabel", {Size=UDim2.new(0.36,0,1,0),Position=UDim2.new(0.42,2,0,0),BackgroundTransparency=1,Text="0 | ❤️3",TextColor3=Color3.fromRGB(255,235,120),Font=Enum.Font.GothamBlack,TextSize=10,TextScaled=true,ZIndex=11}, topBar)
+	local closeBtn = rad(new("TextButton", {Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-21,0,4),BackgroundColor3=Color3.fromRGB(185,45,52),Text="X",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBold,TextSize=10,ZIndex=12}, topBar), 4)
+	local hideBtn = rad(new("TextButton", {Size=UDim2.new(0,24,0,18),Position=UDim2.new(1,-47,0,4),BackgroundColor3=Color3.fromRGB(36,105,78),Text="Ẩn",TextColor3=Color3.fromRGB(225,255,240),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=12}, topBar), 4)
+
+	local playArea = new("Frame", {Size=UDim2.new(1,0,1,-26),Position=UDim2.new(0,0,0,26),BackgroundTransparency=1,ClipsDescendants=true,Active=true,ZIndex=2}, win)
+	local groundHFrac = 0.16
+	local ground = new("Frame", {Size=UDim2.new(1,0,groundHFrac,0),Position=UDim2.new(0,0,1-groundHFrac,0),BackgroundColor3=Color3.fromRGB(94,196,86),BorderSizePixel=0,ZIndex=6}, playArea)
+	new("Frame", {Size=UDim2.new(1,0,0,4),Position=UDim2.new(0,0,0,0),BackgroundColor3=Color3.fromRGB(68,162,62),BorderSizePixel=0,ZIndex=7}, ground)
+	local pipeLayer = new("Frame", {Size=UDim2.new(1,0,1-groundHFrac,0),Position=UDim2.new(0,0,0,0),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=4}, playArea)
+
+	local bird = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,20,0,16),Position=UDim2.new(0.28,0,0.45,0),BackgroundColor3=Color3.fromRGB(245,168,68),BorderSizePixel=0,ZIndex=8}, playArea), 999)
+	stk(bird, Color3.fromRGB(120,66,22), 1.3)
+	new("Frame", {Size=UDim2.new(0.26,0,0.34,0),Position=UDim2.new(0.86,0,0.32,0),BackgroundColor3=Color3.fromRGB(255,195,45),BorderSizePixel=0,ZIndex=9}, bird)
+	local wing = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0.45,0,0.42,0),Position=UDim2.new(0.44,0,0.52,0),BackgroundColor3=Color3.fromRGB(255,244,218),BorderSizePixel=0,ZIndex=9}, bird), 999)
+
+	local menuOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(16,42,34),BackgroundTransparency=0.28,ZIndex=15}, playArea)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.18,0),BackgroundTransparency=1,Text="🐦 CÁNH FLAPPY",TextColor3=Color3.fromRGB(255,245,175),Font=Enum.Font.GothamBlack,TextSize=16,TextScaled=true,ZIndex=16}, menuOverlay)
+	local infoLbl = new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.36,0),BackgroundTransparency=1,Text="Dễ: 3 mạng • Khó: 1 mạng\nQua cột +1 điểm",TextColor3=Color3.fromRGB(215,255,235),Font=Enum.Font.GothamBold,TextSize=10,TextScaled=true,ZIndex=16}, menuOverlay)
+	local startBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.66,0,0,30),Position=UDim2.new(0.5,0,0.58,0),BackgroundColor3=Color3.fromRGB(58,188,88),Text="▶️ Bắt đầu",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=16}, menuOverlay), 7)
+
+	local loseOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(28,12,16),BackgroundTransparency=0.35,Visible=false,ZIndex=18}, playArea)
+	local loseTitleBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.76,0,0,28),Position=UDim2.new(0.5,0,0.18,0),BackgroundColor3=Color3.fromRGB(175,38,48),Text="💀 Bạn đã thua",TextColor3=Color3.fromRGB(255,235,235),Font=Enum.Font.GothamBlack,TextSize=13,ZIndex=19}, loseOverlay), 6)
+	local loseScoreLbl = new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.38,0),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(255,245,210),Font=Enum.Font.GothamBold,TextSize=11,TextScaled=true,ZIndex=19}, loseOverlay)
+	local retryBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.66,0,0,30),Position=UDim2.new(0.5,0,0.60,0),BackgroundColor3=Color3.fromRGB(58,188,88),Text="🔄 Chơi lại",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=19}, loseOverlay), 7)
+
+	local bar = rad(new("Frame", {AnchorPoint=Vector2.new(0,0),Size=UDim2.new(0,102,0,168),Position=UDim2.new(0.5,110,0.5,-80),BackgroundColor3=Color3.fromRGB(11,38,28),BorderSizePixel=0,Active=true,ZIndex=20}, fpGui), 8)
+	stk(bar, Color3.fromRGB(72,225,138), 1.4)
+	local function mkSide(y, txt, col) return rad(new("TextButton", {Size=UDim2.new(1,-10,0,22),Position=UDim2.new(0,5,0,y),BackgroundColor3=col,Text=txt,TextColor3=Color3.fromRGB(230,255,240),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=21}, bar), 5) end
+	local modeBtn = mkSide(6, "", Color3.fromRGB(36,145,88))
+	local lockBtn = mkSide(32, "", Color3.fromRGB(145,45,45))
+	local visBtn  = mkSide(58, "", Color3.fromRGB(28,96,66))
+	local offBtn  = mkSide(84, "❌ Tắt", Color3.fromRGB(140,32,38))
+	local szLbl   = new("TextLabel", {Size=UDim2.new(1,-8,0,14),Position=UDim2.new(0,4,0,112),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(205,255,225),Font=Enum.Font.GothamBold,TextSize=8,TextScaled=true,ZIndex=21}, bar)
+	local track   = rad(new("Frame", {Size=UDim2.new(1,-14,0,7),Position=UDim2.new(0,7,0,134),BackgroundColor3=Color3.fromRGB(22,78,54),BorderSizePixel=0,Active=true,ZIndex=21}, bar), 999)
+	local fill    = rad(new("Frame", {Size=UDim2.new(0,0,1,0),BackgroundColor3=Color3.fromRGB(72,225,138),BorderSizePixel=0,ZIndex=22}, track), 999)
+	local thumb   = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,12,0,12),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=Color3.fromRGB(235,255,245),BorderSizePixel=0,ZIndex=23}, track), 999)
+
+	local running, birdY, birdVy, invuln, pipes = false, 0.44, 0, 0, {}
+	local function maxLives() return fpCfg.hard and 1 or 3 end
+	local function syncHud() if fpScore>fpBest then fpBest=fpScore end; hudLbl.Text = fpScore.." | ❤️"..fpLives end
+	local function clearPipes() for _, p in ipairs(pipes) do p.top:Destroy(); p.bot:Destroy() end; table.clear(pipes) end
+	local function syncSidePos()
+		local wPos, wSz = win.AbsolutePosition, win.AbsoluteSize
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+		local sx = wPos.X + wSz.X + 6
+		if sx + bar.AbsoluteSize.X > vp.X - 6 then sx = math.max(6, wPos.X - bar.AbsoluteSize.X - 6) end
+		bar.Position = UDim2.new(0, sx, 0, math.clamp(wPos.Y + 12, 6, vp.Y - bar.AbsoluteSize.Y - 6))
+	end
+	local function refreshSideUi()
+		modeBtn.Text = fpCfg.hard and "🔥 Khó (1 ❤️)" or "🌿 Dễ (3 ❤️)"; modeBtn.BackgroundColor3 = fpCfg.hard and Color3.fromRGB(155,62,36) or Color3.fromRGB(36,145,88)
+		lockBtn.Text = fpCfg.lock and "🔒 Lock" or "🔓 Unlock"; lockBtn.BackgroundColor3 = fpCfg.lock and Color3.fromRGB(145,45,45) or Color3.fromRGB(36,145,88); win.Draggable = not fpCfg.lock
+		visBtn.Text = fpCfg.vis and "👁️ Ẩn" or "👁️ Hiện"; visBtn.BackgroundColor3 = fpCfg.vis and Color3.fromRGB(28,96,66) or Color3.fromRGB(92,58,18)
+		local r = math.clamp((fpCfg.size - 100) / 200, 0, 1)
+		fill.Size, thumb.Position, szLbl.Text = UDim2.new(r,0,1,0), UDim2.new(r,0,0.5,0), "Size: "..fpCfg.size.." (100-300)"
+	end
+	local function spawnPipe(xFrac)
+		local gapH = fpCfg.hard and 0.25 or 0.32
+		local gapCenter = 0.22 + math.random() * (0.64 - gapH)
+		local topH, botY = math.max(0.05, gapCenter - gapH*0.5), math.min(0.95, gapCenter + gapH*0.5)
+		local topPipe = rad(new("Frame", {Size=UDim2.new(0.15,0,topH,0),Position=UDim2.new(xFrac,0,0,0),BackgroundColor3=Color3.fromRGB(58,184,78),BorderSizePixel=0,ZIndex=4}, pipeLayer), 4)
+		local botPipe = rad(new("Frame", {Size=UDim2.new(0.15,0,1-botY,0),Position=UDim2.new(xFrac,0,botY,0),BackgroundColor3=Color3.fromRGB(58,184,78),BorderSizePixel=0,ZIndex=4}, pipeLayer), 4)
+		table.insert(pipes, {x=xFrac, top=topPipe, bot=botPipe, topH=topH, botY=botY, scored=false})
+	end
+	local function prepareStartMenu()
+		running, loseOverlay.Visible = false, false; clearPipes(); birdY, birdVy, invuln = 0.44, 0, 0
+		bird.Position = UDim2.new(0.28,0,birdY,0); infoLbl.Text = (fpCfg.hard and "Khó (1 mạng)" or "Dễ (3 mạng)").." • Qua cột +1 điểm"
+		menuOverlay.Visible = true; syncHud()
+	end
+	local function triggerLose(reason)
+		running, menuOverlay.Visible = false, false; clearPipes(); birdY, birdVy, invuln = 0.44, 0, 0
+		bird.Position = UDim2.new(0.28,0,birdY,0); syncHud()
+		loseScoreLbl.Text = (reason and (reason.."\n") or "").."Điểm: "..fpScore.." • Best: "..fpBest; loseOverlay.Visible = true
+	end
+	local function startGame()
+		fpScore, fpLives = 0, maxLives(); clearPipes(); birdY, birdVy, invuln = 0.44, -0.42, 0.35
+		bird.Position = UDim2.new(0.28,0,birdY,0); spawnPipe(1.02); spawnPipe(1.56)
+		menuOverlay.Visible, loseOverlay.Visible, running = false, false, true; syncHud()
+	end
+	local function flap()
+		if not fpCfg.vis or not running then return end
+		birdVy = -0.44; wing.Position = UDim2.new(0.44,0,0.34,0)
+		task.delay(0.11, function() if wing then wing.Position = UDim2.new(0.44,0,0.52,0) end end)
+	end
+	local function loseLife(reason)
+		if invuln > 0 then return end
+		fpLives -= 1; invuln = 0.75; syncHud()
+		if fpLives <= 0 then triggerLose(reason) else birdY, birdVy = 0.38, -0.22; bird.Position = UDim2.new(0.28,0,birdY,0) end
+	end
+	local function setSize(v)
+		fpCfg.size = math.clamp(math.floor(v), 100, 300)
+		win.Size = UDim2.new(0, fpCfg.size, 0, math.floor(fpCfg.size*1.25))
+		local bSz = math.clamp(math.floor(fpCfg.size*0.1), 12, 28)
+		bird.Size = UDim2.new(0, bSz, 0, math.floor(bSz*0.8)); refreshSideUi(); task.defer(syncSidePos)
+	end
+	local function setVis(s) fpCfg.vis, win.Visible, bar.Visible = s, s, s; if not s then running = false end; refreshSideUi() end
+	fpSetVis = setVis
+
+	startBtn.MouseButton1Click:Connect(startGame); retryBtn.MouseButton1Click:Connect(startGame); loseTitleBtn.MouseButton1Click:Connect(startGame)
+	closeBtn.MouseButton1Click:Connect(destroyFlappy); offBtn.MouseButton1Click:Connect(destroyFlappy)
+	hideBtn.MouseButton1Click:Connect(function() setVis(false) end); visBtn.MouseButton1Click:Connect(function() setVis(not fpCfg.vis) end)
+	lockBtn.MouseButton1Click:Connect(function() fpCfg.lock = not fpCfg.lock; refreshSideUi() end)
+	modeBtn.MouseButton1Click:Connect(function() fpCfg.hard = not fpCfg.hard; fpLives = maxLives(); refreshSideUi(); if not running and not loseOverlay.Visible then prepareStartMenu() else syncHud() end end)
+
+	table.insert(fpConns, playArea.InputBegan:Connect(function(inp) if running and (inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch) then flap() end end))
+	table.insert(fpConns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncSidePos))
+	table.insert(fpConns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncSidePos))
+
+	local sliding = false
+	local function slideAt(x) setSize(100 + math.clamp((x-track.AbsolutePosition.X)/math.max(1,track.AbsoluteSize.X),0,1)*200) end
+	table.insert(fpConns, track.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=true; slideAt(inp.Position.X) end end))
+	table.insert(fpConns, Uis.InputChanged:Connect(function(inp) if sliding and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then slideAt(inp.Position.X) end end))
+	table.insert(fpConns, Uis.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=false end end))
+
+	fpLoopConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+		if not running or not fpCfg.vis then return end
+		dt = math.min(dt, 0.05)
+		if invuln > 0 then invuln = math.max(0, invuln-dt); bird.BackgroundTransparency = (math.floor(invuln*16)%2==0) and 0.45 or 0 else bird.BackgroundTransparency = 0 end
+		birdVy += 1.35 * dt; birdY += birdVy * dt
+		if birdY < 0.05 then birdY, birdVy = 0.05, 0 end
+		if birdY >= 0.96 then loseLife("Chạm đất"); return end
+		bird.Position = UDim2.new(0.28,0,birdY,0)
+
+		local speed, rightmost = fpCfg.hard and 0.46 or 0.34, 0
+		for i = #pipes, 1, -1 do
+			local p = pipes[i]; p.x -= speed * dt
+			p.top.Position, p.bot.Position = UDim2.new(p.x,0,0,0), UDim2.new(p.x,0,p.botY,0)
+			if p.x > rightmost then rightmost = p.x end
+			if not p.scored and p.x + 0.15 < 0.28 then p.scored = true; fpScore += 1; syncHud() end
+			if (0.28+0.045 > p.x) and (0.28-0.045 < p.x+0.15) and ((birdY-0.035 < p.topH) or (birdY+0.035 > p.botY)) then loseLife("Đâm cột xanh"); return end
+			if p.x < -0.2 then p.top:Destroy(); p.bot:Destroy(); table.remove(pipes, i) end
+		end
+		if rightmost < 0.54 then spawnPipe(math.max(1.02, rightmost + 0.52)) end
+	end)
+
+	setSize(fpCfg.size); prepareStartMenu(); task.defer(syncSidePos)
+end
+
+-- 3) NÉ VẬT CẢN
+local dlGui, dlConns, dlLoopConn = nil, {}, nil
+local dlBest, dlScore = 0, 0
+local dlCfg = {size = 210, vis = true, lock = true}
+local dlWin, dlSetVis = nil, nil
+
+local function destroyDodgeLane()
+	if dlLoopConn then dlLoopConn:Disconnect(); dlLoopConn = nil end
+	for _, c in ipairs(dlConns) do c:Disconnect() end; table.clear(dlConns)
+	if dlGui then pcall(function() dlGui:Destroy() end); dlGui = nil end
+	destroyGui("USBDodgeLaneGui"); dlWin, dlSetVis = nil, nil
+end
+
+local function createDodgeLaneGui()
+	destroyDodgeLane(); dlCfg.vis = true
+	dlGui = new("ScreenGui", {Name="USBDodgeLaneGui",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local win = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,dlCfg.size,0,math.floor(dlCfg.size*1.28)),Position=UDim2.new(0.5,-45,0.5,0),BackgroundColor3=Color3.fromRGB(24,32,54),BorderSizePixel=0,Active=true,Draggable=not dlCfg.lock,ClipsDescendants=true}, dlGui), 10)
+	stk(win, Color3.fromRGB(85,195,255), 2); dlWin = win
+
+	local topBar = new("Frame", {Size=UDim2.new(1,0,0,26),Position=UDim2.new(0,0,0,0),BackgroundColor3=Color3.fromRGB(16,24,44),BorderSizePixel=0,ZIndex=10}, win)
+	new("TextLabel", {Size=UDim2.new(0.44,0,1,0),Position=UDim2.new(0,6,0,0),BackgroundTransparency=1,Text="🏃 Né Vật Cản",TextColor3=Color3.fromRGB(165,235,255),Font=Enum.Font.GothamBlack,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,TextScaled=true,ZIndex=11}, topBar)
+	local hudLbl = new("TextLabel", {Size=UDim2.new(0.34,0,1,0),Position=UDim2.new(0.44,2,0,0),BackgroundTransparency=1,Text="0đ | 👑0",TextColor3=Color3.fromRGB(255,225,95),Font=Enum.Font.GothamBlack,TextSize=10,TextScaled=true,ZIndex=11}, topBar)
+	local closeBtn = rad(new("TextButton", {Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-21,0,4),BackgroundColor3=Color3.fromRGB(185,45,52),Text="X",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBold,TextSize=10,ZIndex=12}, topBar), 4)
+	local hideBtn = rad(new("TextButton", {Size=UDim2.new(0,24,0,18),Position=UDim2.new(1,-47,0,4),BackgroundColor3=Color3.fromRGB(36,88,136),Text="Ẩn",TextColor3=Color3.fromRGB(225,245,255),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=12}, topBar), 4)
+
+	local road = new("Frame", {Size=UDim2.new(1,0,1,-26),Position=UDim2.new(0,0,0,26),BackgroundColor3=Color3.fromRGB(34,44,72),BorderSizePixel=0,ClipsDescendants=true,Active=true,ZIndex=2}, win)
+	for i=1,2 do new("Frame", {Size=UDim2.new(0,2,1,0),Position=UDim2.new(i/3,-1,0,0),BackgroundColor3=Color3.fromRGB(95,125,175),BackgroundTransparency=0.45,BorderSizePixel=0,ZIndex=3}, road) end
+	local obsLayer = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=5}, road)
+	local runner = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,22,0,22),Position=UDim2.new(0.5,0,0.84,0),BackgroundColor3=Color3.fromRGB(75,235,155),BorderSizePixel=0,ZIndex=8}, road), 7)
+
+	local startOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(12,18,34),BackgroundTransparency=0.32,ZIndex=15}, road)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,32),Position=UDim2.new(0,8,0.18,0),BackgroundTransparency=1,Text="⚡ NÉ VẬT CẢN",TextColor3=Color3.fromRGB(145,235,255),Font=Enum.Font.GothamBlack,TextSize=15,TextScaled=true,ZIndex=16}, startOverlay)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.36,0),BackgroundTransparency=1,Text="Chạm trái / phải để đổi làn\nSống càng lâu điểm càng cao",TextColor3=Color3.fromRGB(220,240,255),Font=Enum.Font.GothamBold,TextSize=10,TextScaled=true,ZIndex=16}, startOverlay)
+	local startBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.68,0,0,30),Position=UDim2.new(0.5,0,0.58,0),BackgroundColor3=Color3.fromRGB(45,165,225),Text="▶️ Bắt đầu",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=16}, startOverlay), 7)
+
+	local loseOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(30,12,18),BackgroundTransparency=0.35,Visible=false,ZIndex=18}, road)
+	local loseBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.78,0,0,28),Position=UDim2.new(0.5,0,0.18,0),BackgroundColor3=Color3.fromRGB(180,38,48),Text="💀 Bạn đã thua",TextColor3=Color3.fromRGB(255,235,235),Font=Enum.Font.GothamBlack,TextSize=13,ZIndex=19}, loseOverlay), 6)
+	local loseScoreLbl = new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.38,0),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(255,245,210),Font=Enum.Font.GothamBold,TextSize=11,TextScaled=true,ZIndex=19}, loseOverlay)
+	local retryBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.68,0,0,30),Position=UDim2.new(0.5,0,0.60,0),BackgroundColor3=Color3.fromRGB(45,165,225),Text="🔄 Chơi lại",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=19}, loseOverlay), 7)
+
+	local bar = rad(new("Frame", {AnchorPoint=Vector2.new(0,0),Size=UDim2.new(0,102,0,144),Position=UDim2.new(0.5,110,0.5,-80),BackgroundColor3=Color3.fromRGB(12,26,46),BorderSizePixel=0,Active=true,ZIndex=20}, dlGui), 8)
+	stk(bar, Color3.fromRGB(85,195,255), 1.4)
+	local function mkSide(y, txt, col) return rad(new("TextButton", {Size=UDim2.new(1,-10,0,22),Position=UDim2.new(0,5,0,y),BackgroundColor3=col,Text=txt,TextColor3=Color3.fromRGB(230,248,255),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=21}, bar), 5) end
+	local lockBtn = mkSide(6, "", Color3.fromRGB(145,45,45))
+	local visBtn  = mkSide(32, "", Color3.fromRGB(28,82,126))
+	local offBtn  = mkSide(58, "❌ Tắt", Color3.fromRGB(140,32,38))
+	local szLbl   = new("TextLabel", {Size=UDim2.new(1,-8,0,14),Position=UDim2.new(0,4,0,88),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(195,238,255),Font=Enum.Font.GothamBold,TextSize=8,TextScaled=true,ZIndex=21}, bar)
+	local track   = rad(new("Frame", {Size=UDim2.new(1,-14,0,7),Position=UDim2.new(0,7,0,110),BackgroundColor3=Color3.fromRGB(24,56,92),BorderSizePixel=0,Active=true,ZIndex=21}, bar), 999)
+	local fill    = rad(new("Frame", {Size=UDim2.new(0,0,1,0),BackgroundColor3=Color3.fromRGB(85,195,255),BorderSizePixel=0,ZIndex=22}, track), 999)
+	local thumb   = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,12,0,12),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=Color3.fromRGB(235,250,255),BorderSizePixel=0,ZIndex=23}, track), 999)
+
+	local LANE_X = {1/6, 0.5, 5/6}
+	local lane, running, elapsed, obstacles, spawnTimer = 2, false, 0, {}, 0
+	local function syncHud() local pts=math.floor(dlScore); if pts>dlBest then dlBest=pts end; hudLbl.Text=pts.."đ | 👑"..dlBest end
+	local function clearObs() for _, o in ipairs(obstacles) do o.ui:Destroy() end; table.clear(obstacles) end
+	local function syncSidePos()
+		local wPos, wSz = win.AbsolutePosition, win.AbsoluteSize
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+		local sx = wPos.X + wSz.X + 6
+		if sx + bar.AbsoluteSize.X > vp.X - 6 then sx = math.max(6, wPos.X - bar.AbsoluteSize.X - 6) end
+		bar.Position = UDim2.new(0, sx, 0, math.clamp(wPos.Y + 12, 6, vp.Y - bar.AbsoluteSize.Y - 6))
+	end
+	local function refreshSideUi()
+		lockBtn.Text=dlCfg.lock and "🔒 Lock" or "🔓 Unlock"; lockBtn.BackgroundColor3=dlCfg.lock and Color3.fromRGB(145,45,45) or Color3.fromRGB(36,145,88); win.Draggable=not dlCfg.lock
+		visBtn.Text=dlCfg.vis and "👁️ Ẩn" or "👁️ Hiện"; visBtn.BackgroundColor3=dlCfg.vis and Color3.fromRGB(28,82,126) or Color3.fromRGB(92,58,18)
+		local r = math.clamp((dlCfg.size-100)/200, 0, 1)
+		fill.Size, thumb.Position, szLbl.Text = UDim2.new(r,0,1,0), UDim2.new(r,0,0.5,0), "Size: "..dlCfg.size.." (100-300)"
+	end
+	local function setLane(nl) lane = math.clamp(nl,1,3); runner.Position = UDim2.new(LANE_X[lane],0,0.84,0) end
+	local function spawnObstacle()
+		local blocked, count = {}, (math.random() < 0.28) and 2 or 1
+		while #blocked < count do
+			local cand, dup = math.random(1,3), false
+			for _, b in ipairs(blocked) do if b==cand then dup=true; break end end
+			if not dup then table.insert(blocked, cand) end
+		end
+		for _, ln in ipairs(blocked) do
+			local blk = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0.24,0,0,18),Position=UDim2.new(LANE_X[ln],0,-0.06,0),BackgroundColor3=Color3.fromRGB(245,78,88),BorderSizePixel=0,ZIndex=6}, obsLayer), 5)
+			table.insert(obstacles, {lane=ln, y=-0.06, ui=blk})
+		end
+	end
+	local function prepareMenu() running, loseOverlay.Visible = false, false; clearObs(); setLane(2); startOverlay.Visible = true; syncHud() end
+	local function triggerLose() running, startOverlay.Visible = false, false; clearObs(); syncHud(); loseScoreLbl.Text="Điểm: "..math.floor(dlScore).." • Best: "..dlBest; loseOverlay.Visible = true end
+	local function startGame() dlScore, elapsed, spawnTimer = 0, 0, 0.15; clearObs(); setLane(2); startOverlay.Visible, loseOverlay.Visible, running = false, false, true; syncHud() end
+	local function setSize(v) dlCfg.size=math.clamp(math.floor(v),100,300); win.Size=UDim2.new(0,dlCfg.size,0,math.floor(dlCfg.size*1.28)); local pSz=math.clamp(math.floor(dlCfg.size*0.105),12,30); runner.Size=UDim2.new(0,pSz,0,pSz); refreshSideUi(); task.defer(syncSidePos) end
+	local function setVis(s) dlCfg.vis, win.Visible, bar.Visible = s, s, s; if not s then running = false end; refreshSideUi() end
+	dlSetVis = setVis
+
+	startBtn.MouseButton1Click:Connect(startGame); retryBtn.MouseButton1Click:Connect(startGame); loseBtn.MouseButton1Click:Connect(startGame)
+	closeBtn.MouseButton1Click:Connect(destroyDodgeLane); offBtn.MouseButton1Click:Connect(destroyDodgeLane)
+	hideBtn.MouseButton1Click:Connect(function() setVis(false) end); visBtn.MouseButton1Click:Connect(function() setVis(not dlCfg.vis) end)
+	lockBtn.MouseButton1Click:Connect(function() dlCfg.lock = not dlCfg.lock; refreshSideUi() end)
+
+	table.insert(dlConns, road.InputBegan:Connect(function(inp)
+		if not running or not dlCfg.vis then return end
+		if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+			setLane(((inp.Position.X - road.AbsolutePosition.X) / math.max(1, road.AbsoluteSize.X)) < 0.5 and (lane-1) or (lane+1))
+		end
+	end))
+	table.insert(dlConns, Uis.InputBegan:Connect(function(inp, gpe)
+		if gpe or not running or not dlCfg.vis then return end
+		if inp.KeyCode==Enum.KeyCode.A or inp.KeyCode==Enum.KeyCode.Left then setLane(lane-1)
+		elseif inp.KeyCode==Enum.KeyCode.D or inp.KeyCode==Enum.KeyCode.Right then setLane(lane+1) end
+	end))
+	table.insert(dlConns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncSidePos))
+	table.insert(dlConns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncSidePos))
+
+	local sliding = false
+	local function slideAt(x) setSize(100 + math.clamp((x-track.AbsolutePosition.X)/math.max(1,track.AbsoluteSize.X),0,1)*200) end
+	table.insert(dlConns, track.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=true; slideAt(inp.Position.X) end end))
+	table.insert(dlConns, Uis.InputChanged:Connect(function(inp) if sliding and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then slideAt(inp.Position.X) end end))
+	table.insert(dlConns, Uis.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=false end end))
+
+	dlLoopConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+		if not running or not dlCfg.vis then return end
+		dt = math.min(dt, 0.05); elapsed += dt; dlScore += dt * 10; syncHud()
+		local speed = math.clamp(0.75 + elapsed*0.035, 0.75, 1.95)
+		spawnTimer -= dt; if spawnTimer <= 0 then spawnObstacle(); spawnTimer = math.clamp(0.78 - elapsed*0.015, 0.36, 0.78) end
+		for i = #obstacles, 1, -1 do
+			local o = obstacles[i]; o.y += speed * dt; o.ui.Position = UDim2.new(LANE_X[o.lane],0,o.y,0)
+			if o.lane==lane and math.abs(o.y - 0.84) < 0.085 then triggerLose(); return end
+			if o.y > 1.12 then o.ui:Destroy(); table.remove(obstacles, i) end
+		end
+	end)
+
+	setSize(dlCfg.size); prepareMenu(); task.defer(syncSidePos)
+end
+
+-- 4) SNAKE COMPACT
+local snGui, snConns, snLoopConn = nil, {}, nil
+local snBest, snScore = 0, 0
+local snCfg = {size = 210, vis = true, lock = true}
+local snWin, snSetVis = nil, nil
+
+local function destroySnake()
+	if snLoopConn then snLoopConn:Disconnect(); snLoopConn = nil end
+	for _, c in ipairs(snConns) do c:Disconnect() end; table.clear(snConns)
+	if snGui then pcall(function() snGui:Destroy() end); snGui = nil end
+	destroyGui("USBSnakeCompactGui"); snWin, snSetVis = nil, nil
+end
+
+local function createSnakeGui()
+	destroySnake(); snCfg.vis = true
+	snGui = new("ScreenGui", {Name="USBSnakeCompactGui",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=1000000,ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, Cg)
+	local win = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,snCfg.size,0,math.floor(snCfg.size*1.28)),Position=UDim2.new(0.5,-45,0.5,0),BackgroundColor3=Color3.fromRGB(18,36,28),BorderSizePixel=0,Active=true,Draggable=not snCfg.lock,ClipsDescendants=true}, snGui), 10)
+	stk(win, Color3.fromRGB(80,225,145), 2); snWin = win
+
+	local topBar = new("Frame", {Size=UDim2.new(1,0,0,26),Position=UDim2.new(0,0,0,0),BackgroundColor3=Color3.fromRGB(12,26,20),BorderSizePixel=0,ZIndex=10}, win)
+	new("TextLabel", {Size=UDim2.new(0.44,0,1,0),Position=UDim2.new(0,6,0,0),BackgroundTransparency=1,Text="🐍 Snake Compact",TextColor3=Color3.fromRGB(150,255,190),Font=Enum.Font.GothamBlack,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,TextScaled=true,ZIndex=11}, topBar)
+	local hudLbl = new("TextLabel", {Size=UDim2.new(0.34,0,1,0),Position=UDim2.new(0.44,2,0,0),BackgroundTransparency=1,Text="0đ | 👑0",TextColor3=Color3.fromRGB(255,225,95),Font=Enum.Font.GothamBlack,TextSize=10,TextScaled=true,ZIndex=11}, topBar)
+	local closeBtn = rad(new("TextButton", {Size=UDim2.new(0,18,0,18),Position=UDim2.new(1,-21,0,4),BackgroundColor3=Color3.fromRGB(185,45,52),Text="X",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBold,TextSize=10,ZIndex=12}, topBar), 4)
+	local hideBtn = rad(new("TextButton", {Size=UDim2.new(0,24,0,18),Position=UDim2.new(1,-47,0,4),BackgroundColor3=Color3.fromRGB(28,86,62),Text="Ẩn",TextColor3=Color3.fromRGB(225,255,240),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=12}, topBar), 4)
+
+	local playHold = new("Frame", {Size=UDim2.new(1,-10,1,-36),Position=UDim2.new(0,5,0,31),BackgroundTransparency=1,ZIndex=2}, win)
+	local board = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(1,0,1,0),Position=UDim2.new(0.5,0,0.5,0),BackgroundColor3=Color3.fromRGB(15,30,23),BorderSizePixel=0,Active=true,ZIndex=3}, playHold), 6)
+	stk(board, Color3.fromRGB(58,155,102), 1.4); new("UIAspectRatioConstraint", {AspectRatio=1,DominantAxis=Enum.DominantAxis.Width}, board)
+	local gridLayer = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=4}, board)
+
+	local startOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(10,22,16),BackgroundTransparency=0.32,ZIndex=15}, board)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,32),Position=UDim2.new(0,8,0.18,0),BackgroundTransparency=1,Text="🐍 SNAKE COMPACT",TextColor3=Color3.fromRGB(145,255,185),Font=Enum.Font.GothamBlack,TextSize=14,TextScaled=true,ZIndex=16}, startOverlay)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.36,0),BackgroundTransparency=1,Text="Vuốt / chạm hướng để rẽ\nĂn mồi +1 & tăng tốc dần",TextColor3=Color3.fromRGB(215,255,230),Font=Enum.Font.GothamBold,TextSize=10,TextScaled=true,ZIndex=16}, startOverlay)
+	local startBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.68,0,0,30),Position=UDim2.new(0.5,0,0.58,0),BackgroundColor3=Color3.fromRGB(48,175,98),Text="▶️ Bắt đầu",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=16}, startOverlay), 7)
+
+	local loseOverlay = new("Frame", {Size=UDim2.new(1,0,1,0),BackgroundColor3=Color3.fromRGB(30,12,16),BackgroundTransparency=0.35,Visible=false,ZIndex=18}, board)
+	local loseBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.78,0,0,28),Position=UDim2.new(0.5,0,0.18,0),BackgroundColor3=Color3.fromRGB(180,38,48),Text="💀 Bạn đã thua",TextColor3=Color3.fromRGB(255,235,235),Font=Enum.Font.GothamBlack,TextSize=13,ZIndex=19}, loseOverlay), 6)
+	local loseScoreLbl = new("TextLabel", {Size=UDim2.new(1,-16,0,34),Position=UDim2.new(0,8,0.38,0),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(255,245,210),Font=Enum.Font.GothamBold,TextSize=11,TextScaled=true,ZIndex=19}, loseOverlay)
+	local retryBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0),Size=UDim2.new(0.68,0,0,30),Position=UDim2.new(0.5,0,0.60,0),BackgroundColor3=Color3.fromRGB(48,175,98),Text="🔄 Chơi lại",TextColor3=Color3.fromRGB(255,255,255),Font=Enum.Font.GothamBlack,TextSize=12,ZIndex=19}, loseOverlay), 7)
+
+	local bar = rad(new("Frame", {AnchorPoint=Vector2.new(0,0),Size=UDim2.new(0,102,0,144),Position=UDim2.new(0.5,110,0.5,-80),BackgroundColor3=Color3.fromRGB(11,34,24),BorderSizePixel=0,Active=true,ZIndex=20}, snGui), 8)
+	stk(bar, Color3.fromRGB(80,225,145), 1.4)
+	local function mkSide(y, txt, col) return rad(new("TextButton", {Size=UDim2.new(1,-10,0,22),Position=UDim2.new(0,5,0,y),BackgroundColor3=col,Text=txt,TextColor3=Color3.fromRGB(230,255,240),Font=Enum.Font.GothamBold,TextSize=9,ZIndex=21}, bar), 5) end
+	local lockBtn = mkSide(6, "", Color3.fromRGB(145,45,45))
+	local visBtn  = mkSide(32, "", Color3.fromRGB(28,96,66))
+	local offBtn  = mkSide(58, "❌ Tắt", Color3.fromRGB(140,32,38))
+	local szLbl   = new("TextLabel", {Size=UDim2.new(1,-8,0,14),Position=UDim2.new(0,4,0,88),BackgroundTransparency=1,Text="",TextColor3=Color3.fromRGB(195,255,220),Font=Enum.Font.GothamBold,TextSize=8,TextScaled=true,ZIndex=21}, bar)
+	local track   = rad(new("Frame", {Size=UDim2.new(1,-14,0,7),Position=UDim2.new(0,7,0,110),BackgroundColor3=Color3.fromRGB(20,72,48),BorderSizePixel=0,Active=true,ZIndex=21}, bar), 999)
+	local fill    = rad(new("Frame", {Size=UDim2.new(0,0,1,0),BackgroundColor3=Color3.fromRGB(80,225,145),BorderSizePixel=0,ZIndex=22}, track), 999)
+	local thumb   = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,12,0,12),Position=UDim2.new(0,0,0.5,0),BackgroundColor3=Color3.fromRGB(235,255,245),BorderSizePixel=0,ZIndex=23}, track), 999)
+
+	local GRID_N, snake, dir, nextDir, food = 12, {}, {x=1,y=0}, {x=1,y=0}, {x=9,y=6}
+	local running, stepTimer, segFrames, foodFrame = false, 0, {}, nil
+
+	local function syncHud() if snScore>snBest then snBest=snScore end; hudLbl.Text = snScore.."đ | 👑"..snBest end
+	local function syncSidePos()
+		local wPos, wSz = win.AbsolutePosition, win.AbsoluteSize
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+		local sx = wPos.X + wSz.X + 6
+		if sx + bar.AbsoluteSize.X > vp.X - 6 then sx = math.max(6, wPos.X - bar.AbsoluteSize.X - 6) end
+		bar.Position = UDim2.new(0, sx, 0, math.clamp(wPos.Y + 12, 6, vp.Y - bar.AbsoluteSize.Y - 6))
+	end
+	local function refreshSideUi()
+		lockBtn.Text=snCfg.lock and "🔒 Lock" or "🔓 Unlock"; lockBtn.BackgroundColor3=snCfg.lock and Color3.fromRGB(145,45,45) or Color3.fromRGB(36,145,88); win.Draggable=not snCfg.lock
+		visBtn.Text=snCfg.vis and "👁️ Ẩn" or "👁️ Hiện"; visBtn.BackgroundColor3=snCfg.vis and Color3.fromRGB(28,96,66) or Color3.fromRGB(92,58,18)
+		local r = math.clamp((snCfg.size-100)/200, 0, 1)
+		fill.Size, thumb.Position, szLbl.Text = UDim2.new(r,0,1,0), UDim2.new(r,0,0.5,0), "Size: "..snCfg.size.." (100-300)"
+	end
+	local function renderEntities()
+		for _, f in ipairs(segFrames) do f:Destroy() end; table.clear(segFrames)
+		if foodFrame then foodFrame:Destroy(); foodFrame = nil end
+		local cf = 1 / GRID_N
+		foodFrame = rad(new("Frame", {Size=UDim2.new(cf,-2,cf,-2),Position=UDim2.new((food.x-1)*cf,1,(food.y-1)*cf,1),BackgroundColor3=Color3.fromRGB(255,85,95),BorderSizePixel=0,ZIndex=5}, gridLayer), 999)
+		for idx, seg in ipairs(snake) do
+			local isHead = (idx == 1)
+			table.insert(segFrames, rad(new("Frame", {Size=UDim2.new(cf,-2,cf,-2),Position=UDim2.new((seg.x-1)*cf,1,(seg.y-1)*cf,1),BackgroundColor3=isHead and Color3.fromRGB(120,255,165) or Color3.fromRGB(56,196,112),BorderSizePixel=0,ZIndex=isHead and 7 or 6}, gridLayer), isHead and 5 or 3))
+		end
+	end
+	local function spawnFood()
+		local free = {}
+		for y=1,GRID_N do for x=1,GRID_N do
+			local occ = false; for _, s in ipairs(snake) do if s.x==x and s.y==y then occ=true; break end end
+			if not occ then table.insert(free, {x=x,y=y}) end
+		end end
+		if #free > 0 then local p = free[math.random(#free)]; food = {x=p.x, y=p.y} end
+	end
+	local function setDir(nx, ny) if (nx==-dir.x and ny==-dir.y) or (nx==0 and ny==0) then return end; nextDir = {x=nx, y=ny} end
+	local function prepareMenu()
+		running, loseOverlay.Visible, snScore, stepTimer = false, false, 0, 0
+		dir, nextDir = {x=1,y=0}, {x=1,y=0}; snake = {{x=5,y=6},{x=4,y=6},{x=3,y=6}}; food = {x=9,y=6}
+		startOverlay.Visible = true; syncHud(); renderEntities()
+	end
+	local function triggerLose(reason) running, startOverlay.Visible = false, false; syncHud(); loseScoreLbl.Text=(reason and (reason.."\n") or "").."Điểm: "..snScore.." • Best: "..snBest; loseOverlay.Visible = true end
+	local function startGame()
+		snScore, stepTimer = 0, 0; dir, nextDir = {x=1,y=0}, {x=1,y=0}; snake = {{x=5,y=6},{x=4,y=6},{x=3,y=6}}
+		spawnFood(); startOverlay.Visible, loseOverlay.Visible, running = false, false, true; syncHud(); renderEntities()
+	end
+	local function stepSnake()
+		dir = {x=nextDir.x, y=nextDir.y}
+		local nx, ny = snake[1].x + dir.x, snake[1].y + dir.y
+		if nx<1 or nx>GRID_N or ny<1 or ny>GRID_N then triggerLose("Đâm tường"); return end
+		local eat = (nx==food.x and ny==food.y)
+		for i=1, (eat and #snake or (#snake-1)) do if snake[i].x==nx and snake[i].y==ny then triggerLose("Tự cắn đuôi"); return end end
+		table.insert(snake, 1, {x=nx, y=ny})
+		if eat then snScore += 1; syncHud(); spawnFood() else table.remove(snake) end
+		renderEntities()
+	end
+	local function setSize(v) snCfg.size=math.clamp(math.floor(v),100,300); win.Size=UDim2.new(0,snCfg.size,0,math.floor(snCfg.size*1.28)); refreshSideUi(); task.defer(syncSidePos) end
+	local function setVis(s) snCfg.vis, win.Visible, bar.Visible = s, s, s; if not s then running = false end; refreshSideUi() end
+	snSetVis = setVis
+
+	startBtn.MouseButton1Click:Connect(startGame); retryBtn.MouseButton1Click:Connect(startGame); loseBtn.MouseButton1Click:Connect(startGame)
+	closeBtn.MouseButton1Click:Connect(destroySnake); offBtn.MouseButton1Click:Connect(destroySnake)
+	hideBtn.MouseButton1Click:Connect(function() setVis(false) end); visBtn.MouseButton1Click:Connect(function() setVis(not snCfg.vis) end)
+	lockBtn.MouseButton1Click:Connect(function() snCfg.lock = not snCfg.lock; refreshSideUi() end)
+
+	local tStart = nil
+	table.insert(snConns, board.InputBegan:Connect(function(inp) if running and snCfg.vis and (inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch) then tStart = inp.Position end end))
+	table.insert(snConns, board.InputEnded:Connect(function(inp)
+		if not running or not snCfg.vis or not tStart then return end
+		if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+			local dx, dy = inp.Position.X - tStart.X, inp.Position.Y - tStart.Y; tStart = nil
+			if math.abs(dx)<10 and math.abs(dy)<10 then
+				local rx = (inp.Position.X - board.AbsolutePosition.X) / math.max(1, board.AbsoluteSize.X)
+				local ry = (inp.Position.Y - board.AbsolutePosition.Y) / math.max(1, board.AbsoluteSize.Y)
+				if math.abs(rx-0.5) > math.abs(ry-0.5) then setDir(rx<0.5 and -1 or 1, 0) else setDir(0, ry<0.5 and -1 or 1) end
+			elseif math.abs(dx) > math.abs(dy) then setDir(dx>0 and 1 or -1, 0) else setDir(0, dy>0 and 1 or -1) end
+		end
+	end))
+	table.insert(snConns, Uis.InputBegan:Connect(function(inp, gpe)
+		if gpe or not running or not snCfg.vis then return end
+		if inp.KeyCode==Enum.KeyCode.W or inp.KeyCode==Enum.KeyCode.Up then setDir(0,-1)
+		elseif inp.KeyCode==Enum.KeyCode.S or inp.KeyCode==Enum.KeyCode.Down then setDir(0,1)
+		elseif inp.KeyCode==Enum.KeyCode.A or inp.KeyCode==Enum.KeyCode.Left then setDir(-1,0)
+		elseif inp.KeyCode==Enum.KeyCode.D or inp.KeyCode==Enum.KeyCode.Right then setDir(1,0) end
+	end))
+	table.insert(snConns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncSidePos))
+	table.insert(snConns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncSidePos))
+
+	local sliding = false
+	local function slideAt(x) setSize(100 + math.clamp((x-track.AbsolutePosition.X)/math.max(1,track.AbsoluteSize.X),0,1)*200) end
+	table.insert(snConns, track.InputBegan:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=true; slideAt(inp.Position.X) end end))
+	table.insert(snConns, Uis.InputChanged:Connect(function(inp) if sliding and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then slideAt(inp.Position.X) end end))
+	table.insert(snConns, Uis.InputEnded:Connect(function(inp) if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then sliding=false end end))
+
+	snLoopConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+		if not running or not snCfg.vis then return end
+		dt = math.min(dt, 0.05); stepTimer += dt
+		if stepTimer >= math.clamp(0.22 - snScore*0.006, 0.075, 0.22) then stepTimer = 0; stepSnake() end
+	end)
+
+	setSize(snCfg.size); prepareMenu(); task.defer(syncSidePos)
+end
+
+-- 6) TAP TARGET / BẮN BÓNG ĐẾM NGƯỢC (CÓ BÓNG BẪY)
+local ttGui, ttConns, ttLoopConn = nil, {}, nil
+local ttBest, ttScore = 0, 0
+local ttCfg = {size = 210, vis = true, lock = true}
+local ttWin, ttSetVis = nil, nil
+
+local function destroyTapTarget()
+	if ttLoopConn then ttLoopConn:Disconnect(); ttLoopConn = nil end
+	for _, c in ipairs(ttConns) do c:Disconnect() end; table.clear(ttConns)
+	if ttGui then pcall(function() ttGui:Destroy() end); ttGui = nil end
+	destroyGui("USBTapTargetGui")
+	ttWin, ttSetVis = nil, nil
+end
+
+local function createTapTargetGui()
+	destroyTapTarget()
+	ttCfg.vis = true
+
+	ttGui = new("ScreenGui", {
+		Name = "USBTapTargetGui",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		DisplayOrder = 1000016,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	}, Cg)
+
+	local win = rad(new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(0, ttCfg.size, 0, math.floor(ttCfg.size * 1.28)),
+		Position = UDim2.new(0.45, 0, 0.52, 0),
+		BackgroundColor3 = Color3.fromRGB(20, 26, 44),
+		BorderSizePixel = 0,
+		Active = true,
+		Draggable = not ttCfg.lock,
+		ClipsDescendants = true,
+		ZIndex = 10,
+	}, ttGui), 10)
+	stk(win, Color3.fromRGB(90, 220, 255), 2)
+	ttWin = win
+
+	local topBar = new("Frame", {Size=UDim2.new(1,0,0,26), Position=UDim2.new(0,0,0,0), BackgroundColor3=Color3.fromRGB(14,19,34), BorderSizePixel=0, ZIndex=12}, win)
+	new("TextLabel", {Size=UDim2.new(0.42,0,1,0), Position=UDim2.new(0,6,0,0), BackgroundTransparency=1, Text="🎯 Bắn Bóng", TextColor3=Color3.fromRGB(145,235,255), Font=Enum.Font.GothamBlack, TextSize=10, TextXAlignment=Enum.TextXAlignment.Left, TextScaled=true, ZIndex=13}, topBar)
+	local hudLbl = new("TextLabel", {Size=UDim2.new(0.36,0,1,0), Position=UDim2.new(0.42,2,0,0), BackgroundTransparency=1, Text="0đ | 8.0s", TextColor3=Color3.fromRGB(255,225,95), Font=Enum.Font.GothamBlack, TextSize=10, TextScaled=true, ZIndex=13}, topBar)
+	local closeBtn = rad(new("TextButton", {Size=UDim2.new(0,18,0,18), Position=UDim2.new(1,-21,0,4), BackgroundColor3=Color3.fromRGB(185,45,52), Text="X",TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBold, TextSize=10, ZIndex=15}, topBar), 4)
+	local hideBtn = rad(new("TextButton", {Size=UDim2.new(0,24,0,18), Position=UDim2.new(1,-47,0,4), BackgroundColor3=Color3.fromRGB(36,78,124), Text="Ẩn",TextColor3=Color3.fromRGB(225,245,255), Font=Enum.Font.GothamBold, TextSize=9, ZIndex=15}, topBar), 4)
+
+	local arena = new("Frame", {Size=UDim2.new(1,0,1,-26), Position=UDim2.new(0,0,0,26), BackgroundColor3=Color3.fromRGB(26,35,58), BorderSizePixel=0, ClipsDescendants=true, Active=true, ZIndex=11}, win)
+	local ballLayer = new("Frame", {Size=UDim2.new(1,0,1,0), BackgroundTransparency=1, ClipsDescendants=true, ZIndex=12}, arena)
+
+	local startOverlay = new("Frame", {Size=UDim2.new(1,0,1,0), BackgroundColor3=Color3.fromRGB(12,16,30), BackgroundTransparency=0.32, ZIndex=18}, arena)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,32), Position=UDim2.new(0,8,0.18,0), BackgroundTransparency=1, Text="🎯 BẮN BÓNG", TextColor3=Color3.fromRGB(145,235,255), Font=Enum.Font.GothamBlack, TextSize=14, TextScaled=true, ZIndex=19}, startOverlay)
+	new("TextLabel", {Size=UDim2.new(1,-16,0,34), Position=UDim2.new(0,8,0.36,0), BackgroundTransparency=1, Text="Bấm bóng xanh/vàng +1 điểm\nNé bóng bẫy đỏ (-2 điểm)", TextColor3=Color3.fromRGB(225,240,255), Font=Enum.Font.GothamBold, TextSize=10, TextScaled=true, ZIndex=19}, startOverlay)
+	local startBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(0.68,0,0,30), Position=UDim2.new(0.5,0,0.58,0), BackgroundColor3=Color3.fromRGB(45,175,115), Text="▶️ Bắt đầu", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBlack, TextSize=12, ZIndex=20}, startOverlay), 7)
+
+	local loseOverlay = new("Frame", {Size=UDim2.new(1,0,1,0), BackgroundColor3=Color3.fromRGB(30,12,16), BackgroundTransparency=0.35, Visible=false, ZIndex=21}, arena)
+	local loseBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(0.78,0,0,28), Position=UDim2.new(0.5,0,0.18,0), BackgroundColor3=Color3.fromRGB(180,38,48), Text="💀 Bạn đã thua", TextColor3=Color3.fromRGB(255,235,235), Font=Enum.Font.GothamBlack, TextSize=13, ZIndex=22}, loseOverlay), 6)
+	local loseScoreLbl = new("TextLabel", {Size=UDim2.new(1,-16,0,34), Position=UDim2.new(0,8,0.38,0), BackgroundTransparency=1, Text="", TextColor3=Color3.fromRGB(255,245,210), Font=Enum.Font.GothamBold, TextSize=11, TextScaled=true, ZIndex=22}, loseOverlay)
+	local retryBtn = rad(new("TextButton", {AnchorPoint=Vector2.new(0.5,0), Size=UDim2.new(0.68,0,0,30), Position=UDim2.new(0.5,0,0.60,0), BackgroundColor3=Color3.fromRGB(45,175,115), Text="🔄 Chơi lại", TextColor3=Color3.fromRGB(255,255,255), Font=Enum.Font.GothamBlack, TextSize=12, ZIndex=22}, loseOverlay), 7)
+
+	local bar = rad(new("Frame", {AnchorPoint=Vector2.new(0,0), Size=UDim2.new(0,102,0,144), Position=UDim2.new(0.5,110,0.5,-80), BackgroundColor3=Color3.fromRGB(14,24,42), BorderSizePixel=0, Active=true, ZIndex=25}, ttGui), 8)
+	stk(bar, Color3.fromRGB(90,220,255), 1.4)
+	local function mkSide(y, txt, col)
+		return rad(new("TextButton", {Size=UDim2.new(1,-10,0,22), Position=UDim2.new(0,5,0,y), BackgroundColor3=col, Text=txt, TextColor3=Color3.fromRGB(235,248,255), Font=Enum.Font.GothamBold, TextSize=9, ZIndex=26}, bar), 5)
+	end
+	local lockBtn = mkSide(6, "", Color3.fromRGB(145,45,45))
+	local visBtn  = mkSide(32, "", Color3.fromRGB(36,78,124))
+	local offBtn  = mkSide(58, "❌ Tắt", Color3.fromRGB(140,32,38))
+	local szLbl   = new("TextLabel", {Size=UDim2.new(1,-8,0,14), Position=UDim2.new(0,4,0,88), BackgroundTransparency=1, Text="", TextColor3=Color3.fromRGB(205,242,255), Font=Enum.Font.GothamBold, TextSize=8, TextScaled=true, ZIndex=26}, bar)
+	local track   = rad(new("Frame", {Size=UDim2.new(1,-14,0,7), Position=UDim2.new(0,7,0,110), BackgroundColor3=Color3.fromRGB(36,56,88), BorderSizePixel=0, Active=true, ZIndex=26}, bar), 999)
+	local fill    = rad(new("Frame", {Size=UDim2.new(0,0,1,0), BackgroundColor3=Color3.fromRGB(90,220,255), BorderSizePixel=0, ZIndex=27}, track), 999)
+	local thumb   = rad(new("Frame", {AnchorPoint=Vector2.new(0.5,0.5), Size=UDim2.new(0,12,0,12), Position=UDim2.new(0,0,0.5,0), BackgroundColor3=Color3.fromRGB(240,252,255), BorderSizePixel=0, ZIndex=28}, track), 999)
+
+	local running, timeLeft, spawnTimer = false, 8.0, 0
+	local balls = {}
+
+	local function syncHud()
+		if ttScore > ttBest then ttBest = ttScore end
+		hudLbl.Text = ttScore.."đ | "..string.format("%.1fs", math.max(0, timeLeft))
+	end
+
+	local function clearBalls()
+		for _, b in ipairs(balls) do if b.ui then b.ui:Destroy() end end
+		table.clear(balls)
+	end
+
+	local function syncSidePos()
+		local wPos, wSz = win.AbsolutePosition, win.AbsoluteSize
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+		local sx = wPos.X + wSz.X + 6
+		if sx + bar.AbsoluteSize.X > vp.X - 6 then sx = math.max(6, wPos.X - bar.AbsoluteSize.X - 6) end
+		bar.Position = UDim2.new(0, sx, 0, math.clamp(wPos.Y + 12, 6, vp.Y - bar.AbsoluteSize.Y - 6))
+	end
+
+	local function refreshSideUi()
+		lockBtn.Text = ttCfg.lock and "🔒 Lock" or "🔓 Unlock"
+		lockBtn.BackgroundColor3 = ttCfg.lock and Color3.fromRGB(145,45,45) or Color3.fromRGB(36,145,88)
+		win.Draggable = not ttCfg.lock
+		visBtn.Text = ttCfg.vis and "👁️ Ẩn" or "👁️ Hiện"
+		visBtn.BackgroundColor3 = ttCfg.vis and Color3.fromRGB(36,78,124) or Color3.fromRGB(92,58,18)
+		local r = math.clamp((ttCfg.size - 100) / 200, 0, 1)
+		fill.Size, thumb.Position, szLbl.Text = UDim2.new(r,0,1,0), UDim2.new(r,0,0.5,0), "Size: "..ttCfg.size.." (100-300)"
+	end
+
+	local function prepareMenu()
+		running = false
+		loseOverlay.Visible = false
+		ttScore, timeLeft, spawnTimer = 0, 8.0, 0
+		clearBalls()
+		startOverlay.Visible = true
+		syncHud()
+	end
+
+	local function triggerLose(reason)
+		running = false
+		clearBalls()
+		startOverlay.Visible = false
+		syncHud()
+		loseBtn.Text = "💀 Bạn đã thua"
+		loseScoreLbl.Text = (reason and (reason.."\n") or "").."Điểm: "..ttScore.." • Best: "..ttBest
+		loseOverlay.Visible = true
+	end
+
+	local function spawnBall(isTrap)
+		local bPx = math.clamp(math.floor(ttCfg.size * 0.13), 18, 36)
+		local rx = 0.16 + math.random() * 0.68
+		local ry = 0.16 + math.random() * 0.68
+		local life = math.clamp(1.25 - ttScore * 0.015, 0.55, 1.25)
+		local btn = rad(new("TextButton", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Size = UDim2.new(0, bPx, 0, bPx),
+			Position = UDim2.new(rx, 0, ry, 0),
+			BackgroundColor3 = isTrap and Color3.fromRGB(235, 52, 68) or Color3.fromRGB(72, 225, 145),
+			Text = isTrap and "💣" or "🎯",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			Font = Enum.Font.GothamBlack,
+			TextSize = math.max(10, math.floor(bPx * 0.45)),
+			ZIndex = 14,
+		}, ballLayer), 999)
+		stk(btn, isTrap and Color3.fromRGB(255, 165, 175) or Color3.fromRGB(220, 255, 235), 1.3)
+
+		local entry = {ui = btn, age = 0, life = life, isTrap = isTrap}
+		table.insert(balls, entry)
+
+		btn.MouseButton1Click:Connect(function()
+			if not running or not ttCfg.vis then return end
+			for i, item in ipairs(balls) do
+				if item == entry then
+					if item.ui then item.ui:Destroy() end
+					table.remove(balls, i)
+					break
+				end
+			end
+			if isTrap then
+				ttScore = math.max(0, ttScore - 2)
+				timeLeft = math.max(0, timeLeft - 0.8)
+				syncHud()
+				if ttScore <= 0 then
+					triggerLose("Bấm trúng bóng bẫy")
+				end
+			else
+				ttScore += 1
+				timeLeft = math.min(9.5, timeLeft + 0.35)
+				syncHud()
+			end
+		end)
+	end
+
+	local function spawnWave()
+		spawnBall(false)
+		if math.random() < math.clamp(0.32 + ttScore * 0.02, 0.32, 0.75) then
+			spawnBall(true)
+		end
+	end
+
+	local function startGame()
+		ttScore, timeLeft, spawnTimer = 0, 8.0, 0
+		clearBalls()
+		startOverlay.Visible = false
+		loseOverlay.Visible = false
+		running = true
+		syncHud()
+		spawnWave()
+	end
+
+	local function setSize(v)
+		ttCfg.size = math.clamp(math.floor(v), 100, 300)
+		win.Size = UDim2.new(0, ttCfg.size, 0, math.floor(ttCfg.size * 1.28))
+		refreshSideUi()
+		task.defer(syncSidePos)
+	end
+
+local function setVis(s)
+		ttCfg.vis = s
+		win.Visible = s
+		bar.Visible = s
+		if not s then running = false end
+		refreshSideUi()
+	end
+	ttSetVis = setVis
+
+	startBtn.MouseButton1Click:Connect(startGame)
+	retryBtn.MouseButton1Click:Connect(startGame)
+	loseBtn.MouseButton1Click:Connect(startGame)
+	closeBtn.MouseButton1Click:Connect(destroyTapTarget)
+	offBtn.MouseButton1Click:Connect(destroyTapTarget)
+	hideBtn.MouseButton1Click:Connect(function() setVis(false) end)
+	visBtn.MouseButton1Click:Connect(function() setVis(not ttCfg.vis) end)
+	lockBtn.MouseButton1Click:Connect(function() ttCfg.lock = not ttCfg.lock; refreshSideUi() end)
+
+	table.insert(ttConns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncSidePos))
+	table.insert(ttConns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncSidePos))
+
+	local sliding = false
+	local function slideAt(x)
+		local r = math.clamp((x - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X), 0, 1)
+		setSize(100 + r * 200)
+	end
+	table.insert(ttConns, track.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+			sliding = true; slideAt(inp.Position.X)
+		end
+	end))
+	table.insert(ttConns, Uis.InputChanged:Connect(function(inp)
+		if sliding and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+			slideAt(inp.Position.X)
+		end
+	end))
+	table.insert(ttConns, Uis.InputEnded:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+			sliding = false
+		end
+	end))
+
+	ttLoopConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+		if not running or not ttCfg.vis then return end
+		dt = math.min(dt, 0.05)
+		timeLeft -= dt
+		if timeLeft <= 0 then
+			timeLeft = 0
+			syncHud()
+			triggerLose("Hết giờ")
+			return
+		end
+		syncHud()
+
+		local interval = math.clamp(0.72 - ttScore * 0.015, 0.24, 0.72)
+		spawnTimer -= dt
+		if spawnTimer <= 0 then
+			spawnWave()
+			spawnTimer = interval
+		end
+
+		for i = #balls, 1, -1 do
+			local b = balls[i]
+			b.age += dt
+			if b.age >= b.life then
+				if b.ui then b.ui:Destroy() end
+				table.remove(balls, i)
+			elseif b.ui then
+				local ratio = math.clamp(1 - b.age / b.life, 0.25, 1)
+				b.ui.BackgroundTransparency = (1 - ratio) * 0.45
+			end
+		end
+	end)
+
+	setSize(ttCfg.size)
+	prepareMenu()
+	task.defer(syncSidePos)
+end
+
+-- TẠO 4 THẺ GAME ĐỀU CÓ NÚT ẨN/HIỆN GIỚI THIỆU
+makeGameCard("🧱 Block Blast", Color3.fromRGB(60,235,140), "• Lưới 8x8 • Bóng mờ snap • +30 & Combo 50..180.\n• x2 điểm • May mắn • Size 100–300 • Lock/Ẩn/Tắt.", 142, 86, createBlockBlastGui, function()
+	if bbGui and bbWin and bbSetVis then bbSetVis(not bbCfg.vis) else createBlockBlastGui() end
+end, destroyBlockBlast)
+
+makeGameCard("🐦 Cánh Flappy", Color3.fromRGB(60,235,140), "• Bắt đầu • Qua cột +1 • Đâm cột / rơi đất mất mạng.\n• Dễ: 3 mạng • Khó: 1 mạng • Bạn đã thua & Chơi lại.", 142, 86, createFlappyGui, function()
+	if fpGui and fpWin and fpSetVis then fpSetVis(not fpCfg.vis) else createFlappyGui() end
+end, destroyFlappy)
+
+makeGameCard("⚡ Né Vật Cản", Color3.fromRGB(60,235,140), "• 3 làn chạm trái/phải • Tính điểm theo thời gian sống sót.\n• Bắt đầu / Bạn đã thua / Chơi lại • Size 100–300.", 142, 86, createDodgeLaneGui, function()
+	if dlGui and dlWin and dlSetVis then dlSetVis(not dlCfg.vis) else createDodgeLaneGui() end
+end, destroyDodgeLane)
+
+makeGameCard("🐍 Snake Compact", Color3.fromRGB(60,235,140), "• Lưới gọn • Ăn mồi +1 & tăng tốc dần • Đâm tường / cắn đuôi thua.\n• Size 100–300 • Lock/Unlock • Ẩn/Hiện & Tắt bên cạnh.", 142, 86, createSnakeGui, function()
+	if snGui and snWin and snSetVis then snSetVis(not snCfg.vis) else createSnakeGui() end
+end, destroySnake)
+
+makeGameCard("🎯 Bắn Bóng Đếm Ngược", Color3.fromRGB(90,220,255), "• Bóng bật ngẫu nhiên + bóng bẫy đỏ • Bấm trúng +1 & rút ngắn nhịp.\n• Bấm bẫy trừ điểm / thua • Ván ngắn phá Best nhanh • Size 100–300.", 142, 86, createTapTargetGui, function()
+	if ttGui and ttWin and ttSetVis then ttSetVis(not ttCfg.vis) else createTapTargetGui() end
+end, destroyTapTarget)
+
+
+relayoutMiniGames()
